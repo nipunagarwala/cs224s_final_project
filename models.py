@@ -15,10 +15,14 @@ class Config(Object):
 		num_layers = 3
 		num_classes = 20
 		num_features = 100 #TO FIX!!!!
+		max_norm = 10
 
 
 
 class SimpleAcousticNN(Object):
+	"""
+    Implements a recurrent neural network with multiple hidden layers and CTC loss.
+    """
 
 	def __init__(self, num_features, seq_len, cell_type):
 		self.config = Config()
@@ -74,7 +78,10 @@ class SimpleAcousticNN(Object):
 		self.loss = Config.l2_lambda * l2_cost + cost
 
 	def add_optimizer_op(self):
-		self.optimizer = tf.train.AdamOptimizer(Config.lr).minimize(self.loss)  
+		tvars = tf.trainable_variables()
+		grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars),self.config.max_norm)
+		optimizer = tf.train.AdamOptimizer(self.config.lr)
+		self.train_op = optimizer.apply_gradients(zip(grads, tvars)) 
 
 	def add_decoder_and_wer_op(self):
 		(all_decoded_sequence,log_probabilities) = tf.nn.ctc_beam_search_decoder(inputs=self.logits, sequence_length=self.seq_lens_placeholder,
@@ -98,11 +105,20 @@ class SimpleAcousticNN(Object):
 							self.seq_len_placeholder:seq_batch}
 
 	def train_one_batch(self, session, train=True):
+		_,batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, self.loss, self.wer, 
+													self.num_valid_examples, self.merged_summary_op], self.feed_dict)
+
+		if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
+			return 0
+
+		return batch_cost, wer, summary
 
 
+	def test_one_batch(self, session):
+		batch_cost, wer, batch_num_valid_ex, summary = session.run([self.loss, self.wer, 
+													self.num_valid_examples, self.merged_summary_op], self.feed_dict)
 
-
-	def test_one_batch(self):
+		return batch_cost, wer, summary
 
 
 
