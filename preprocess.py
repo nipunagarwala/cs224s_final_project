@@ -1,0 +1,153 @@
+"""
+@author Pol Rosello
+"""
+
+import pickle
+import glob
+import os
+import numpy as np
+import pandas as pd
+import scipy.signal
+
+EMG_F_SAMPLE = 600.0
+# AUDIO_F_SAMPLE = 16e3
+
+EMG_FRAME_LEN = int(27e-3 * EMG_F_SAMPLE) # 27ms frame length
+EMG_SHIFT_LEN = int(10e-3 * EMG_F_SAMPLE) # 10ms frame shift
+# AUDIO_FRAME_LEN = 160
+
+EMG_SIGNALS = ["emg1", "emg2", "emg3", "emg4", "emg6"] # skip emg5
+
+def stack_context(features, k=10):
+    """
+    Represents timestep t as the features at steps t-k, t-k+1, ..., t-1, t, t+1, ..., t+k-1, t+k
+    concatenated together.
+    Inputs:
+        features: a 2D tensor of shape (n_feats, n_frames)
+        k: the context length to consider
+    Returns:
+        stacked_features: a 2D tensor of shape (n_augmented_feats, n_context_frames) where
+            n_augmented_feats = n_feats * (2*k + 1)
+            n_context_frames = n_frames - (2*k + 1)
+    """
+    n_feats, n_frames = features.shape[0], features.shape[1]
+    stacked_features = np.array([features[:,frame-k:frame+k+1] for frame in range(k,n_frames-k-1)])
+    stacked_features = np.reshape(stacked_features, [-1, (2*k+1)*n_feats]).T
+    return stacked_features
+
+
+def spectrogram_features(data, signals=EMG_SIGNALS, frame_len=EMG_FRAME_LEN,
+                         frame_shift=EMG_SHIFT_LEN, flatten=True):
+    """
+    Computes spectrogram features given input EMG data.
+    Inputs:
+        data: a pandas DataFrame containing EMG data of an utterance.
+        signals: the names of the signals from the DataFrame to use.
+        frame_len: the number of samples per FFT frame.
+        frame_shift: the number of samples between the starts of consecutive frames.
+        flatten: if True, returns a 2D tensor, else a 3D tensor (see below).
+    Returns:
+        spectrogram:
+            If flatten is False, a numpy.ndarray of shape (n_signals, n_freqs, n_frames), where
+            n_signals = the number of EMG electrodes used
+            n_freqs = frame_len / 2 + 1
+            n_frames = n_timesteps / frame_len
+            spectrogram[x,y,z] contains the power density of frequency freqs[y] measured
+            by electrode x at the z-th frame (i.e. at absolute time t[z]).
+            If flatten is True, then the n_signals and n_freqs are flattened into one
+            dimension, such that spectrogram is instead a 2D numpy.ndarray of shape
+            (n_feats, n_frames), where n_feats = (n_signals * n_freqs).
+    """
+    samples = np.array(data[signals].T) # samples is n_signals x n_timesteps
+    noverlap = frame_len - frame_shift
+    freqs, t, spectrogram = scipy.signal.spectrogram(samples, fs=EMG_F_SAMPLE,
+                                                     nperseg=frame_len, noverlap=noverlap)
+    
+    if flatten:
+        n_frames = spectrogram.shape[2]
+        spectrogram = np.reshape(spectrogram, [-1, n_frames])
+    
+    return spectrogram
+
+def wand_features(data, signals=EMG_SIGNALS, frame_len=EMG_FRAME_LEN,
+                  frame_shift=EMG_SHIFT_LEN, k=10):
+    """
+    Computes features from Michael Wand's dissertation, Advancing Electromyographic
+    Continuous Speech Recognition: Signal Preprocessing and Modeling (2014), as
+    described in Section 4.1.2.
+    Inputs:
+        data: a pandas DataFrame containing EMG data of an utterance.
+        signals: the names of the signals from the DataFrame to use.
+        frame_len: the number of samples per frame.
+        frame_shift: the number of samples between the starts of consecutive frames.
+        k: the context length to consider.
+    Returns:
+        wand: features from Wand et al.
+    """
+    # samples is n_signals x n_timesteps
+    samples = np.array(data[signals].T)
+
+    n_signals, n_timesteps = samples.shape[0], samples.shape[1]
+
+    # Create the 17-point weighted moving average filter shown in Figure 4.2.
+    ramp_filter = np.linspace(0,0.1,num=9)
+    ma_filter = np.concatenate((ramp_filter[:-1], ramp_filter[::-1]))
+    assert len(ma_filter) == 17
+    
+    n_frames = int(n_timesteps / frame_shift)
+    n_feats = 5
+    features = np.zeros((n_signals, n_feats, n_frames))
+
+    for i in range(n_signals):
+        # Mean normalize
+        x = samples[i] - np.mean(samples[i])
+
+        # Apply moving average filter to compute low frequency signal w
+        w = np.convolve(x, ma_filter, mode="same")
+
+        # Compute high frequency signal p
+        p = x - w
+
+        # Compute rectified signal r
+        r = abs(p)
+
+        for frame_id, t in enumerate(range(0,n_timesteps,frame_shift)):
+            w_frame = w[t:t+frame_len]
+            p_frame = p[t:t+frame_len]
+            r_frame = r[t:t+frame_len]
+            M_w = np.mean(w_frame)           # Frame-based mean of w
+            P_w = np.mean(w_frame * w_frame) # Frame-based power of w
+            P_r = np.mean(r_frame * r_frame) # Frame-based power of r
+            M_r = np.mean(r_frame)
+
+            # Zero-crossing rate of p
+            z_p = len(np.where(np.diff(np.signbit(p_frame)))[0]) / len(p_frame)
+
+            features[i, :, frame_id] = np.array([M_w, P_w, P_r, z_p, M_r])
+
+    features = np.reshape(features, [-1, n_frames])
+
+    features = stack_context(features, k=k)
+
+    return features
+
+def extract_features(pkl_filename, feature_type):
+    with open(pkl_filename, "rb") as f:
+        audio, emg = pickle.load(f)
+
+    if feature_type == "wand":
+        return wand_features(emg)
+    elif feature_type == "spectrogram":
+        return spectrogram_features(emg)
+    else:
+        raise RuntimeError("Invalid feature type specified")
+
+def extract_all_features(directory, feature_type):
+    all_features = []
+    for filename in glob.glob(os.path.join(directory, "*.pkl")):
+        features = extract_features(filename, feature_type)
+        all_features.append((filename, features))
+    return all_features
+
+if __name__ == "__main__":
+    features = extract_features("utteranceInfo/002_001_0100.pkl", feature_type="wand")
