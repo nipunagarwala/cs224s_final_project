@@ -18,7 +18,6 @@ class Config(Object):
 		max_norm = 10
 
 
-
 class SimpleAcousticNN(Object):
 	"""
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
@@ -29,6 +28,7 @@ class SimpleAcousticNN(Object):
 		self.input_placeholder = tf.placeholder(tf.float32, shape=(None, None, num_features))
 		self.target_placeholder = tf.sparse_placeholder(tf.int32)
 		self.seq_len_placeholder = tf.placeholder(tf.int32, shape=(None))
+		self.config.num_features = num_features
 		if cell_type == 'rnn':
 			self.cell = tf.contrib.rnn.RNNCell(num_units = self.config.num_hidden, 
 							input_size=(None, self.config.num_features))
@@ -104,7 +104,8 @@ class SimpleAcousticNN(Object):
 		self.feed_dict = {self.inputs_placeholder:input_batch, self.targets_placeholder:target_batch,
 							self.seq_len_placeholder:seq_batch}
 
-	def train_one_batch(self, session, train=True):
+	def train_one_batch(self, session, input_batch, target_batch, seq_batch,  train=True):
+		self.add_feed_dict(input_batch, target_batch, seq_batch)
 		_,batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, self.loss, self.wer, 
 													self.num_valid_examples, self.merged_summary_op], self.feed_dict)
 
@@ -119,6 +120,9 @@ class SimpleAcousticNN(Object):
 													self.num_valid_examples, self.merged_summary_op], self.feed_dict)
 
 		return batch_cost, wer, summary
+
+	def get_config(self):
+		return self.config
 
 
 
