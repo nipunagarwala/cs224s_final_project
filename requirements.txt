@@ -6,4 +6,5 @@ tensorflow>=1.1   #URLs at https://www.tensorflow.org/install/install_linux#TF_P
 tensorflow-gpu>=1.1 
 scipy
 sklearn
-pandas
+pandas==0.18.1 
+pickle
