@@ -28,8 +28,23 @@ each frame.
 
 ### Overview format
 The `utteranceInfo.pkl` file contains the metainformation (8 columns):
+* speakerId, sessionId, utteranceId, label, transcript, gender, mode, train/test split
 
-        `speakerId, sessionId, utteranceId, label, transcript, gender, mode, train/test split`
+The file `utteranceInfoSample.pkl` for the sample data contains:
+
+	  speakerId sessionId utteranceId         label  \
+	0       002       001        0311  002_001_0311   
+	1       002       001        0312  002_001_0312   
+	2       002       001        0313  002_001_0313   
+	6       002       001        0317  002_001_0317   
+	7       002       001        0318  002_001_0318   
+
+											  transcript gender    mode  split  
+	0  BOTH OUR CORPORATE AND FOUNDATION CONTRIBUTION...   male  silent  train  
+	1  THE COALITIONS ARE SPONSORING TWO SEPARATE INI...   male  silent  train  
+	2  THE RESULTS HAVE PROMPTED THEM TO QUESTION THE...   male  silent  train  
+	6                                       WE CAN DO IT   male  silent  train  
+	7  FINGERPRINTS WERE EXTENSIVELY USED AND ALSO DE...   male  silent  train
 		
 To recover the audio & EMG data for 
 a particular file, unpickle it from `$label.pkl`.
