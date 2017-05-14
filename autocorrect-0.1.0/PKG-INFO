@@ -1,0 +1,17 @@
+Metadata-Version: 1.1
+Name: autocorrect
+Version: 0.1.0
+Summary: Python 3 Spelling Corrector
+Home-page: http://github.com/foobarmus/autocorrect/
+Author: Jonas McCallum
+Author-email: jonasmccallum@gmail.com
+License: http://www.opensource.org/licenses/mit-license.php
+Description: UNKNOWN
+Keywords: autocorrect spelling corrector
+Platform: UNKNOWN
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
