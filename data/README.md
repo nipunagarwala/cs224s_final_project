@@ -40,25 +40,25 @@ the EMG data is the second element.
 ### Audio data format
 The audio data (16000 Hertz) has an index plus 5 columns:
 
-	* index (int sample ID from 0 to length of trimmed segment)
+* index (int sample ID from 0 to length of trimmed segment)
 
-	* audio_amplitude (signed float)
+* audio_amplitude (signed float)
 
-	* rawSampleId (int from startOffset to endOffset -- the
-				non-trimmmed consecutive sample IDs)
+* rawSampleId (int from startOffset to endOffset -- the
+			non-trimmmed consecutive sample IDs)
 
-	* frameId (int from 0 where 0 is used for the first 10 ms, 
-			 1 is used for the second 10 ms, ...;
-			 the audio data has a 16000 Hertz frame rate, so
-			 each complete frameId recurs 160 times)
-			 
-	* phone (string indicating corpus authors' guess as to 
-		   phone -- for audible & whispered, the guess uses
-		   forced alignments; for silent, the guess uses a 
-		   model that matches)
-		   
-	* word (string indicating the word from the transcript
-		  that the corpus authors guess was being uttered)
+* frameId (int from 0 where 0 is used for the first 10 ms, 
+		 1 is used for the second 10 ms, ...;
+		 the audio data has a 16000 Hertz frame rate, so
+		 each complete frameId recurs 160 times)
+		 
+* phone (string indicating corpus authors' guess as to 
+	   phone -- for audible & whispered, the guess uses
+	   forced alignments; for silent, the guess uses a 
+	   model that matches)
+	   
+* word (string indicating the word from the transcript
+	  that the corpus authors guess was being uttered)
 
 The raw audio data is amplitude data.
 		  
@@ -66,45 +66,45 @@ The raw audio data is amplitude data.
 
 The EMG data (600 Hertz) has an index plus 10 columns:
 
-	* index (int sample ID from 0 to length of trimmed segment)
-	
-	* emg1 (signed int; anterior belly of the digastric & tongue,
-			derived unipolarly,
-			+ reference electrode on nose)
+* index (int sample ID from 0 to length of trimmed segment)
+
+* emg1 (signed int; anterior belly of the digastric & tongue,
+		derived unipolarly,
+		+ reference electrode on nose)
+		
+* emg2 (signed int; levator anguli oris & zygomaticus major,
+		derived bipolarly)  
+		
+* emg3 (signed int; levator anguli oris & zygomaticus major,
+		derived unipolarly,
+		+ reference electrode behind the ears)
+		
+* emg4 (signed int; platysma,
+		derived unipolarly,
+		+ reference electrode behind the ears)
+		
+* emg5 (signed int; removed in corpus authors' experiments 
+		because it tends to yield unstable and
+		artifact-prone signals;
+		platysma & depressor anguli oris,
+		derived unipolarly,
+		+ reference electrode behind the ears)
+		
+* emg6 (signed int; tongue,
+		derived bipolarly)
+		
+* rawSampleId (int from startOffset to endOffset -- the
+			non-trimmmed consecutive sample IDs)
 			
-	* emg2 (signed int; levator anguli oris & zygomaticus major,
-			derived bipolarly)  
-			
-	* emg3 (signed int; levator anguli oris & zygomaticus major,
-			derived unipolarly,
-			+ reference electrode behind the ears)
-			
-	* emg4 (signed int; platysma,
-			derived unipolarly,
-			+ reference electrode behind the ears)
-			
-	* emg5 (signed int; removed in corpus authors' experiments 
-			because it tends to yield unstable and
-			artifact-prone signals;
-			platysma & depressor anguli oris,
-			derived unipolarly,
-			+ reference electrode behind the ears)
-			
-	* emg6 (signed int; tongue,
-			derived bipolarly)
-			
-	* rawSampleId (int from startOffset to endOffset -- the
-				non-trimmmed consecutive sample IDs)
-				
-	* frameId (int from 0 where 0 is used for the first 10 ms, 
-			 1 is used for the second 10 ms, ...;
-			 the audio data has a 600 Hertz frame rate, so
-			 each complete frameId recurs 6 times)
-			 
-	* phone (string indicating corpus authors' guess as to 
-			 phone -- for audible & whispered, the guess uses
-			 forced alignments; for silent, the guess uses a 
-			 model that matches)
-			 
-	* word (string indicating the word from the transcript
-		  that the corpus authors guess was being uttered)
+* frameId (int from 0 where 0 is used for the first 10 ms, 
+		 1 is used for the second 10 ms, ...;
+		 the audio data has a 600 Hertz frame rate, so
+		 each complete frameId recurs 6 times)
+		 
+* phone (string indicating corpus authors' guess as to 
+		 phone -- for audible & whispered, the guess uses
+		 forced alignments; for silent, the guess uses a 
+		 model that matches)
+		 
+* word (string indicating the word from the transcript
+	  that the corpus authors guess was being uttered)
