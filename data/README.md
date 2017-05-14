@@ -38,7 +38,6 @@ The file `utteranceInfoSample.pkl` for the sample data contains:
 	2       002       001        0313  002_001_0313   
 	6       002       001        0317  002_001_0317   
 	7       002       001        0318  002_001_0318   
-
 											  transcript gender    mode  split  
 	0  BOTH OUR CORPORATE AND FOUNDATION CONTRIBUTION...   male  silent  train  
 	1  THE COALITIONS ARE SPONSORING TWO SEPARATE INI...   male  silent  train  
