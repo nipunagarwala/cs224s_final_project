@@ -146,7 +146,7 @@ The EMG data (600 Hertz) has an index plus 10 columns:
 * word (string indicating the word from the transcript
 	  that is the corpus authors' guess as to what was being 
       uttered at that sample)
-      
+
     >>> emg.shape
     (3720, 10)
     >>> emg[0:5]
