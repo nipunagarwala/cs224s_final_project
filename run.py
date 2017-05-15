@@ -26,10 +26,10 @@ def create_simple_model():
     return model
 
 def train_model(model, args):
-    logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_data)
-
     model_config = model.get_config()
+    logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
+    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_data, feature_type='wand', batch_size=)
+
 
     with tf.Graph().as_default():
         init = tf.global_variables_initializer()
@@ -48,15 +48,17 @@ def train_model(model, args):
                 start = time.time()
 
                 epoch_loss_avg = 0
+                epoch_wer_avg = 0
                 cur_batch_iter = 0
                 for cur_batch in random.sample(range(num_batches_per_epoch),num_batches_per_epoch):
                     batch_cost, wer, summary = model.train_one_batch(self, session, input_batch, target_batch, seq_batch)
                     train_writer.add_summary(summary, step_ii)
                     step_ii += 1 
                     epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
+                    epoch_wer_avg += (batch_cost - epoch_wer_avg)/(cur_batch_iter+1)
 
                     log = "Epoch {}/{}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
-                    print(log.format(curr_epoch+1, model_config.num_epochs, train_cost, train_wer, time.time() - start))
+                    print(log.format(curr_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
 
                 if args.save_every is not None and args.save_to_file is not None and (curr_epoch + 1) % args.save_every == 0:
                     saver.save(session, args.save_to_file, global_step=curr_epoch + 1)

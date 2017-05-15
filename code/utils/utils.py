@@ -28,3 +28,23 @@ def parse_commandline():
     args = parser.parse_args()
 
     return args
+
+
+
+def convert_to_encodings(target_data):
+    char_set = set()
+    for i in xrange(target_data.shape[0]):
+        new_set = set(target_data)
+        char_set.union(new_set)
+
+    char_list = list(char_set)
+    encodings = xrange(len(char_list))
+    encoded_targets = []
+
+    for t in xrange(len(target_data)):
+        for i in xrange(len(char_list)):
+            if char_list[i] in target_data[t]:
+                encoded_targets.append(map(int,list(target[t].replace(ch,encodings[i]))))
+
+    return encoded_targets
+
