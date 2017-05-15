@@ -147,6 +147,8 @@ The EMG data (600 Hertz) has an index plus 10 columns:
 	  that is the corpus authors' guess as to what was being 
       uttered at that sample)
 
+We can access EMG data as above, unpacking it as follows:
+
     >>> emg.shape
     (3720, 10)
     >>> emg[0:5]
