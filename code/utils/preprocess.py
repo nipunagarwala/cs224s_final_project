@@ -141,6 +141,8 @@ def extract_features(pkl_filename, feature_type):
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
 
+    emg["triplePhones"]  = someMath(emg["pno e"])
+        
     if feature_type == "wand":
         return wand_features(emg)
     elif feature_type == "spectrogram":
