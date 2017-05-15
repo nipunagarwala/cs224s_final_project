@@ -30,15 +30,20 @@ each frame.
 The `utteranceInfo.pkl` file contains the metainformation (8 columns):
 * speakerId, sessionId, utteranceId, label, transcript, gender, mode, train/test split
 
-The file `utteranceInfoSample.pkl` for the sample data contains:
+The file `utteranceInfoSample.pkl` for the sample data can be accessed as follows:
 
+    >>> import pickle
+    >>> import pandas
+    >>> with open("utteranceInfoSample.pkl", "rb") as f:
+    >>>     info = pickle.load(f)
+    >>> info
 	  speakerId sessionId utteranceId         label  \
 	0       002       001        0311  002_001_0311   
 	1       002       001        0312  002_001_0312   
 	2       002       001        0313  002_001_0313   
 	6       002       001        0317  002_001_0317   
 	7       002       001        0318  002_001_0318   
-											  transcript gender    mode  split  
+       transcript                                         gender  mode   split  
 	0  BOTH OUR CORPORATE AND FOUNDATION CONTRIBUTION...   male  silent  train  
 	1  THE COALITIONS ARE SPONSORING TWO SEPARATE INI...   male  silent  train  
 	2  THE RESULTS HAVE PROMPTED THEM TO QUESTION THE...   male  silent  train  
@@ -50,6 +55,12 @@ a particular file, unpickle it from `$label.pkl`.
 The `$label.pkl` files contain a tuple in which 
 the audio data is the first element and 
 the EMG data is the second element.
+
+    >>> import pickle
+    >>> import pandas
+    >>> with open("002_001_0311.pkl", "rb") as f:
+    >>>     audio, emg = pickle.load(f)
+
 
 ### Audio data format
 The audio data (16000 Hertz) has an index plus 5 columns:
@@ -75,6 +86,18 @@ The audio data (16000 Hertz) has an index plus 5 columns:
 	  that the corpus authors guess was being uttered)
 
 The raw audio data is amplitude data.
+
+    >>> audio.shape
+    (99239, 5)
+    >>> audio[0:5]
+       audio_amplitude  rawSampleId  frameId phone word
+    0        -0.000244         3672        0   SIL    $
+    1        -0.000214         3673        0   SIL    $
+    2        -0.000031         3674        0   SIL    $
+    3         0.000122         3675        0   SIL    $
+    4        -0.000061         3676        0   SIL    $
+
+Because of the higher sampling frequency, there are more rows of audio than of EMG data.
 		  
 ### EMG data
 
@@ -121,4 +144,19 @@ The EMG data (600 Hertz) has an index plus 10 columns:
 		 model that matches)
 		 
 * word (string indicating the word from the transcript
-	  that the corpus authors guess was being uttered)
+	  that is the corpus authors' guess as to what was being 
+      uttered at that sample)
+
+We can access EMG data as above, unpacking it as follows:
+
+    >>> emg.shape
+    (3720, 10)
+    >>> emg[0:5]
+       emg1  emg2  emg3  emg4   emg5  emg6  rawSampleId  frameId phone word
+    0 -1699 -8119  3133  7616  11609  3431          204        0   SIL    $
+    1 -1527 -8080  3050  7599  11503  3196          205        0   SIL    $
+    2 -1561 -7903  3893  8324  12135  3337          206        0   SIL    $
+    3 -1589 -8015  3132  7859  12106  3201          207        0   SIL    $
+    4 -1661 -7817  3093  7646  11964  2772          208        0   SIL    $
+
+Because of the lower sampling frequency, there are fewer rows of EMG than of audio data.

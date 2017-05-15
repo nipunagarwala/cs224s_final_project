@@ -8,3 +8,5 @@ scipy
 sklearn
 pandas==0.18.1 
 pickle
+soundfile
+autocorrect
