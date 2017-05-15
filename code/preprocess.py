@@ -111,7 +111,13 @@ def wand_features(data, signals=EMG_SIGNALS, frame_len=EMG_FRAME_LEN,
         # Compute rectified signal r
         r = abs(p)
 
-        for frame_id, t in enumerate(range(0,n_timesteps,frame_shift)):
+        # Ignore any frames that are incomplete
+        # (aka if n_timesteps is 2500 but 
+        # n_frames is 416 and frame_shift is 6, 
+        # count up to  416*6 = 2496 rather than 2500 timesteps,
+        # so we don't end up with a unit in the features that
+        # is made up of an incomplete set of samples)
+        for frame_id, t in enumerate(range(0, n_frames*frame_shift, frame_shift)):
             w_frame = w[t:t+frame_len]
             p_frame = p[t:t+frame_len]
             r_frame = r[t:t+frame_len]
@@ -141,7 +147,7 @@ def extract_features(pkl_filename, feature_type):
         return spectrogram_features(emg)
     else:
         raise RuntimeError("Invalid feature type specified")
-        
+
 def extract_all_features(directory, feature_type):
     all_features = []
     for filename in glob.glob(os.path.join(directory, "*.pkl")):
