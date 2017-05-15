@@ -22,14 +22,11 @@ def create_simple_model():
     model.add_optimizer_op()
     model.add_decoder_and_wer_op()
     model.add_summary_op()
-    model.add_feed_dict()
 
     return model
 
 def train_model(model, args):
     logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    train_dataset = load_dataset(args.train_path)
-    val_dataset = load_dataset(args.val_path)
     train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_data)
 
     model_config = model.get_config()

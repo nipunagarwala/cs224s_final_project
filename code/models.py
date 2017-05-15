@@ -7,15 +7,15 @@ import tensorflow as tf
 class Config(object):
 
     def __init__(self):
-        batch_size = 64
-        lr = 1e-3
-        l2_lambda = 0.0000001
-        hidden_size = 128
-        num_epochs = 50
-        num_layers = 3
-        num_classes = 20
-        num_features = 100 #TO FIX!!!!
-        max_norm = 10
+        self.batch_size = 64
+        self.lr = 1e-3
+        self.l2_lambda = 0.0000001
+        self.hidden_size = 128
+        self.num_epochs = 50
+        self.num_layers = 3
+        self.num_classes = 20
+        self.num_features = 100 #TO FIX!!!!
+        self.max_norm = 10
 
 
 class SimpleAcousticNN(object):
@@ -24,17 +24,17 @@ class SimpleAcousticNN(object):
     """
     def __init__(self, num_features=100, seq_len=1, cell_type='lstm'):
         self.config = Config()
-        self.input_placeholder = tf.placeholder(tf.float32, shape=(None, None, num_features))
-        self.target_placeholder = tf.sparse_placeholder(tf.int32)
-        self.seq_len_placeholder = tf.placeholder(tf.int32, shape=(None))
+        self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, num_features))
+        self.targets_placeholder = tf.sparse_placeholder(tf.int32)
+        self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
         if cell_type == 'rnn':
-            self.cell = tf.contrib.rnn.RNNCell(num_units = self.config.num_hidden, 
+            self.cell = tf.contrib.rnn.RNNCell(num_units = self.config.hidden_size, 
                             input_size=(None, self.config.num_features))
         elif cell_type == 'gru':
-            self.cell = tf.contrib.rnn.GRUCell(num_units = self.config.num_hidden, 
+            self.cell = tf.contrib.rnn.GRUCell(num_units = self.config.hidden_size, 
                             input_size=(None, self.config.num_features))
         elif cell_type == 'lstm':
-            self.cell = tf.contrib.rnn.LSTMCell(num_units = self.config.num_hidden, 
+            self.cell = tf.contrib.rnn.LSTMCell(num_units = self.config.hidden_size, 
                             input_size=(None, self.config.num_features))
         else:
             raise ValueError('Input correct cell type')
@@ -43,17 +43,17 @@ class SimpleAcousticNN(object):
     def build_model(self):
         W = tf.get_variable("Weights", shape=[self.config.hidden_size, self.config.num_classes],
                             initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable("Bias", shape=[Config.num_classes])
+        b = tf.get_variable("Bias", shape=[self.config.num_classes])
 
         rnnNet = tf.contrib.rnn.MultiRNNCell(cells = [self.cell]*self.config.num_layers, state_is_tuple=True)
         (rnnNet_out, rnnNet_state) = tf.nn.dynamic_rnn(cell = rnnNet, inputs=self.inputs_placeholder,
-                        sequence_length=self.seq_len_placeholder,dtype=tf.float32)
+                        sequence_length=self.seq_lens_placeholder,dtype=tf.float32)
 
         cur_shape = tf.shape(rnnNet_out)
         rnnOut_2d = tf.reshape(rnnNet_out, [-1, cur_shape[2]])
 
         logits_2d = tf.matmul(rnnOut_2d, W) + b
-        logits = tf.reshape(logits_2d,[cur_shape[0], cur_shape[1], Config.num_classes])
+        logits = tf.reshape(logits_2d,[cur_shape[0], cur_shape[1], self.config.num_classes])
 
         self.logits = logits
 
@@ -73,7 +73,7 @@ class SimpleAcousticNN(object):
         self.num_valid_examples = tf.cast(tf.shape(loss_without_invalid_paths)[0], tf.int32)
         cost = tf.reduce_mean(loss_without_invalid_paths) 
 
-        self.loss = Config.l2_lambda * l2_cost + cost
+        self.loss = self.config.l2_lambda * l2_cost + cost
 
     def add_optimizer_op(self):
         tvars = tf.trainable_variables()
