@@ -34,13 +34,19 @@ def make_batch(array, n_batches, batch_size):
 
 def make_batches(samples, sample_lens, transcripts, batch_size):
     """
+    Shuffles the input data into batches.
+
+    General usage:
+        samples, sample_lens, transcripts = preprocess.extract_all_features("../../data/", "spectrogram")
+        batched_samples, batched_sample_lens, batched_transcripts = utils.make_batches(samples, sample_lens, transcripts, 32)
+
     Returns
         batched_samples: a numpy ndarray of shape (n_batches, batch_size, n_features, max_timesteps).
             Samples of length < max_timesteps are padded with zeros.
         batched_sample_lens: a numpy ndarray of shape (n_batches, batch_size) containing the
             length of sample batches_samples[x,y] in number of timesteps
         batched_transcripts: a list of strings of shape (n_batches, batch_size) containing the
-            transcript of sample batches_sample[x,y] in number of timesteps
+            transcript of sample batches_sample[x,y].
     """
 
     p = np.random.permutation(len(samples))
