@@ -331,6 +331,6 @@ if __name__ == "__main__":
     """
     To test, run from root directory: python3 code/utils/preprocess.py
     """
-    samples, lens, transcripts = extract_all_features("sample-data/", "wand")
-    samples, lens, transcripts = extract_all_features("sample-data/", "spectrogram")
-    samples, lens, transcripts = extract_all_features("sample-data/", "wand_lda")
+    samples, lens, transcripts = extract_all_features("sample-data/train/", "wand")
+    samples, lens, transcripts = extract_all_features("sample-data/train/", "spectrogram")
+    samples, lens, transcripts = extract_all_features("sample-data/train/", "wand_lda")
