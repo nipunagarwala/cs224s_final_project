@@ -141,10 +141,12 @@ def extract_features(pkl_filename, feature_type):
         return spectrogram_features(emg)
     else:
         raise RuntimeError("Invalid feature type specified")
-
+        
 def extract_all_features(directory, feature_type):
     all_features = []
     for filename in glob.glob(os.path.join(directory, "*.pkl")):
+        if "utteranceInfo" in filename:
+            continue
         features = extract_features(filename, feature_type)
         all_features.append((filename, features))
     return all_features
