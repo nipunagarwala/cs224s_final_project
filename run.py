@@ -14,6 +14,7 @@ from code.models import *
 from time import gmtime, strftime
 
 from code.utils.utils import parse_commandline
+from code.utils.preprocess import extract_all_features
 
 BATCH_SIZE = 32
 
@@ -29,7 +30,7 @@ def create_simple_model(num_features, cell_type):
 
 def train_model(args):
     logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_data, feature_type='wand', batch_size=BATCH_SIZE)
+    samples, sample_lens, transcripts = preprocess.extract_all_features("data/", "spectrogram")
 
     model = create_simple_model(,cell_type='lstm')
     model_config = model.get_config()
@@ -47,6 +48,8 @@ def train_model(args):
             global_start = time.time()
             step_ii = 0
             for curr_epoch in range(model_config.num_epochs):
+                batched_samples, batched_sample_lens, batched_transcripts = utils.make_batches(samples, sample_lens, transcripts, BATCH_SIZE)
+                encoded_transcripts = utils.convert_to_encodings(batched_transcripts)
                 total_train_cost = total_train_wer = 0
                 start = time.time()
 
@@ -54,7 +57,7 @@ def train_model(args):
                 epoch_wer_avg = 0
                 cur_batch_iter = 0
                 for cur_batch in random.sample(range(num_batches_per_epoch),num_batches_per_epoch):
-                    batch_cost, wer, summary = model.train_one_batch(self, session, input_batch, target_batch, seq_batch)
+                    batch_cost, wer, summary = model.train_one_batch(self, session, batched_samples, batched_transcripts, batched_sample_lens)
                     train_writer.add_summary(summary, step_ii)
                     step_ii += 1 
                     epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
@@ -75,7 +78,6 @@ def test_model(model, args):
         raise ValueError('No pre-trained model found!')
 
     train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_path, BATCH_SIZE)
-
 
 
 
