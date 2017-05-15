@@ -22,20 +22,17 @@ class SimpleAcousticNN(object):
     """
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
     """
-    def __init__(self, num_features=100, seq_len=1, cell_type='lstm'):
+    def __init__(self, num_features=100, cell_type='lstm'):
         self.config = Config()
         self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, num_features))
         self.targets_placeholder = tf.sparse_placeholder(tf.int32)
         self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
         if cell_type == 'rnn':
-            self.cell = tf.contrib.rnn.RNNCell(num_units = self.config.hidden_size, 
-                            input_size=(None, self.config.num_features))
+            self.cell = tf.contrib.rnn.RNNCell(num_units = self.config.hidden_size)
         elif cell_type == 'gru':
-            self.cell = tf.contrib.rnn.GRUCell(num_units = self.config.hidden_size, 
-                            input_size=(None, self.config.num_features))
+            self.cell = tf.contrib.rnn.GRUCell(num_units = self.config.hidden_size)
         elif cell_type == 'lstm':
-            self.cell = tf.contrib.rnn.LSTMCell(num_units = self.config.hidden_size, 
-                            input_size=(None, self.config.num_features))
+            self.cell = tf.contrib.rnn.LSTMCell(num_units = self.config.hidden_size)
         else:
             raise ValueError('Input correct cell type')
 

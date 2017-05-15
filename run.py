@@ -15,8 +15,10 @@ from time import gmtime, strftime
 
 from code.utils.utils import parse_commandline
 
-def create_simple_model():
-    model = SimpleAcousticNN()
+BATCH_SIZE = 32
+
+def create_simple_model(num_features, cell_type):
+    model = SimpleAcousticNN(num_features, cell_type)
     model.build_model()
     model.add_loss_op()
     model.add_optimizer_op()
@@ -25,11 +27,12 @@ def create_simple_model():
 
     return model
 
-def train_model(model, args):
-    model_config = model.get_config()
+def train_model(args):
     logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_data, feature_type='wand', batch_size=)
+    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_data, feature_type='wand', batch_size=BATCH_SIZE)
 
+    model = create_simple_model(,cell_type='lstm')
+    model_config = model.get_config()
 
     with tf.Graph().as_default():
         init = tf.global_variables_initializer()
@@ -78,11 +81,10 @@ def test_model(model, args):
 
   
 def main(args):
-    model = create_simple_model()
     if args.phase == 'train':
-        train_model(model, args)
+        train_model(args)
     if args.phase == 'test':
-        test_model(model, args)
+        test_model(args)
 
 
 
