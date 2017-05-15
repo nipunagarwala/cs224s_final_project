@@ -150,4 +150,4 @@ def extract_all_features(directory, feature_type):
     return all_features
 
 if __name__ == "__main__":
-    features = extract_features("utteranceInfo/002_001_0100.pkl", feature_type="wand")
+    features = extract_features("sample-data/002_001_0311.pkl", feature_type="wand")
