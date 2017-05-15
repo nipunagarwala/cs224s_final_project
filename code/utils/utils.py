@@ -28,12 +28,3 @@ def parse_commandline():
     args = parser.parse_args()
 
     return args
-
-def make_batches(dataset, batch_size):
-
-
-
-
-
-
-
