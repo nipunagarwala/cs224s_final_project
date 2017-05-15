@@ -82,7 +82,7 @@ def wand_features(data, signals=EMG_SIGNALS, frame_len=EMG_FRAME_LEN,
         frame_shift: the number of samples between the starts of consecutive frames.
         k: the context length to consider.
     Returns:
-        wand: features from Wand et al.
+        wand: a 2D numpy.dnarray of shape (n_feats, n_frames) of features from Wand et al.
     """
     # samples is n_signals x n_timesteps
     samples = np.array(data[signals].T)
@@ -143,11 +143,34 @@ def extract_features(pkl_filename, feature_type):
         raise RuntimeError("Invalid feature type specified")
 
 def extract_all_features(directory, feature_type):
-    all_features = []
-    for filename in glob.glob(os.path.join(directory, "*.pkl")):
-        features = extract_features(filename, feature_type)
-        all_features.append((filename, features))
-    return all_features
+    samples = []
+    transcripts = []
+
+    with open(os.path.join(directory, "utteranceInfo.pkl"), "rb") as f:
+        meta = pickle.load(f)
+        
+    for i, utterance in meta.iterrows():
+        pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
+        features = extract_features(pkl_filename, feature_type)
+        transcript = utterance["transcript"]
+        samples.append(features)
+        transcripts.append(transcript)
+
+    # samples is a list of 2D ndarrays of length (n_feats, n_timesteps)
+
+    sample_lens = np.array([s.shape[1] for s in samples], dtype=np.int64)
+
+    n_samples = len(samples)
+    n_feats = samples[0].shape[0]
+
+    assert all(s.shape[0] == n_feats for s in samples)
+
+    padded_samples = np.zeros((n_samples, n_feats, max(sample_lens)))
+
+    for i, sample in enumerate(samples):
+        padded_samples[i,:,0:sample_lens[i]] = sample
+
+    return padded_samples, sample_lens, np.array(transcripts)
 
 if __name__ == "__main__":
     features = extract_features("utteranceInfo/002_001_0100.pkl", feature_type="wand")
