@@ -143,6 +143,15 @@ def extract_features(pkl_filename, feature_type):
         raise RuntimeError("Invalid feature type specified")
 
 def extract_all_features(directory, feature_type):
+    """
+    Returns
+        padded_samples: a numpy ndarray of shape (n_samples, n_features, max_timesteps).
+            Samples of length < max_timesteps are padded with zeros.
+        sample_lens: a numpy ndarray of shape (n_samples,) containing the
+            length of sample padded_samples[i] in number of timesteps.
+        transcripts: a list of strings of shape (n_samples,) containing the
+            transcript of sample padded_samples[i].
+    """
     samples = []
     transcripts = []
 
