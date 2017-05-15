@@ -147,6 +147,26 @@ def extract_features(pkl_filename, feature_type):
         return spectrogram_features(emg)
     else:
         raise RuntimeError("Invalid feature type specified")
+        
+def extract_features_lda(directory, feature_type):
+    # Be careful about LDA on test data -- point this 
+    # function to a directory that is train-only, 
+    # and save the LDA parameters so we can apply them
+    # to test data
+    
+    # feats = extract_features_lda("sample-data", "wand")
+    all_features = []
+    for fullpath in glob.glob(os.path.join(directory, "*.pkl")):
+        pathUnits = os.path.split(fullpath)
+        fn = pathUnits[-1]
+        if fn.startswith("utteranceInfo"):
+            continue
+        else:
+            features = extract_features(fullpath, feature_type)
+            all_features.append(features)
+    return all_features
+    
+
 
 def extract_all_features(directory, feature_type):
     all_features = []
