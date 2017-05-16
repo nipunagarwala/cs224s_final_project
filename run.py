@@ -14,6 +14,7 @@ from code.models import *
 from time import gmtime, strftime
 
 from code.utils.utils import parse_commandline
+from code.utils.utils import make_batches
 
 def create_simple_model():
     model = SimpleAcousticNN()

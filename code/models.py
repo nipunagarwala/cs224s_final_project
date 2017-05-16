@@ -28,14 +28,11 @@ class SimpleAcousticNN(object):
         self.targets_placeholder = tf.sparse_placeholder(tf.int32)
         self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
         if cell_type == 'rnn':
-            self.cell = tf.contrib.rnn.RNNCell(num_units = self.config.hidden_size, 
-                            input_size=(None, self.config.num_features))
+            self.cell_fn = tf.contrib.rnn.RNNCell
         elif cell_type == 'gru':
-            self.cell = tf.contrib.rnn.GRUCell(num_units = self.config.hidden_size, 
-                            input_size=(None, self.config.num_features))
+            self.cell_fn = tf.contrib.rnn.GRUCell
         elif cell_type == 'lstm':
-            self.cell = tf.contrib.rnn.LSTMCell(num_units = self.config.hidden_size, 
-                            input_size=(None, self.config.num_features))
+            self.cell_fn = tf.contrib.rnn.LSTMCell
         else:
             raise ValueError('Input correct cell type')
 
@@ -45,7 +42,11 @@ class SimpleAcousticNN(object):
                             initializer=tf.contrib.layers.xavier_initializer())
         b = tf.get_variable("Bias", shape=[self.config.num_classes])
 
-        rnnNet = tf.contrib.rnn.MultiRNNCell(cells = [self.cell]*self.config.num_layers, state_is_tuple=True)
+        rnnNet = tf.contrib.rnn.MultiRNNCell(
+                            [self.cell_fn(num_units = self.config.hidden_size, 
+                                input_size=(None, self.config.num_features)) 
+                                for _ in range(self.config.num_layers)], 
+                            state_is_tuple=True)
         (rnnNet_out, rnnNet_state) = tf.nn.dynamic_rnn(cell = rnnNet, inputs=self.inputs_placeholder,
                         sequence_length=self.seq_lens_placeholder,dtype=tf.float32)
 
@@ -102,10 +103,10 @@ class SimpleAcousticNN(object):
         self.feed_dict = {self.inputs_placeholder:input_batch, self.targets_placeholder:target_batch,
                             self.seq_len_placeholder:seq_batch}
 
-	def train_one_batch(self, session, input_batch, target_batch, seq_batch,  train=True):
-		self.add_feed_dict(input_batch, target_batch, seq_batch)
-		_,batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, self.loss, self.wer, 
-													self.num_valid_examples, self.merged_summary_op], self.feed_dict)
+    def train_one_batch(self, session, input_batch, target_batch, seq_batch,  train=True):
+        self.add_feed_dict(input_batch, target_batch, seq_batch)
+        _,batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, self.loss, self.wer, 
+                                                    self.num_valid_examples, self.merged_summary_op], self.feed_dict)
 
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
@@ -119,8 +120,8 @@ class SimpleAcousticNN(object):
 
         return batch_cost, wer, summary
 
-	def get_config(self):
-		return self.config
+    def get_config(self):
+        return self.config
 
 
 
