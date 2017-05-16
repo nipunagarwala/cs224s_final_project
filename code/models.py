@@ -42,7 +42,11 @@ class SimpleAcousticNN(object):
                             initializer=tf.contrib.layers.xavier_initializer())
         b = tf.get_variable("Bias", shape=[self.config.num_classes])
 
-        rnnNet = tf.contrib.rnn.MultiRNNCell(cells = [self.cell]*self.config.num_layers, state_is_tuple=True)
+        rnnNet = tf.contrib.rnn.MultiRNNCell(
+                            [self.cell_fn(num_units = self.config.hidden_size, 
+                                input_size=(None, self.config.num_features)) 
+                                for _ in range(self.config.num_layers)], 
+                            state_is_tuple=True)
         (rnnNet_out, rnnNet_state) = tf.nn.dynamic_rnn(cell = rnnNet, inputs=self.inputs_placeholder,
                         sequence_length=self.seq_lens_placeholder,dtype=tf.float32)
 

@@ -15,6 +15,7 @@ from time import gmtime, strftime
 
 from code.utils.utils import parse_commandline
 from code.utils.preprocess import extract_all_features
+from code.utils.utils import make_batches
 
 BATCH_SIZE = 32
 
@@ -28,12 +29,11 @@ def create_simple_model(num_features, cell_type):
 
     return model
 
-def train_model(args):
-    logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    samples, sample_lens, transcripts = extract_all_features(args.train_path, "spectrogram")
-
-    model = create_simple_model(samples.shape[0],cell_type='lstm')
+def train_model(model, args):
     model_config = model.get_config()
+    
+    logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
+    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_path)
 
     with tf.Graph().as_default():
         init = tf.global_variables_initializer()
@@ -82,6 +82,7 @@ def test_model(model, args):
 
   
 def main(args):
+    print(args)
     if args.phase == 'train':
         train_model(args)
     if args.phase == 'test':

@@ -2,8 +2,8 @@
 matplotlib>=2.0
 numpy>=1.12
 nltk>=3.2
-tensorflow>=1.1   #URLs at https://www.tensorflow.org/install/install_linux#TF_PYTHON_URL
-tensorflow-gpu>=1.1 
+tensorflow==1.1   #URLs at https://www.tensorflow.org/install/install_linux#TF_PYTHON_URL
+tensorflow-gpu==1.1 
 scipy
 sklearn
 pandas==0.18.1 

@@ -1,0 +1,533 @@
+categories:
+excellent | good | fair | poor | awful | zilch
+                                        entirely garbage
+                                not understandable
+                          parts are entirely misstagged
+                   misstagged but understandable
+         mostly perfect
+perfect
+
+
+
+OVERALL QUALITY (TOTAL SUB-SEGMENTS)
+        audible     whispered     silent
+word    4.6  (62)   3.8  (65)     3.4  (57)
+phone   3.6 (194)   0.8  (194)    0.2 (188)
+
+In the above, I've rated each sentence holistically according to its sub-segments on the following scale:
+5: excellent (perfect)
+4: good (mostly perfect, 1 or 2 errors)
+3: fair (has repeated mistaggings but is understandable)
+2: poor (medium-length subsegments are misstagged)
+1: awful (not understandable; long-length segments are entirely misstagged)
+0: zilch (almost entirely garbage -- any correctness seems random)
+
+I've averaged the scores of 5 sentences of each type to estimate the quality of tags (30 sentences total).
+
+Qualitative examples are available on Google Drive and in context/sampled.txt.
+
+
+word audible: 4.6 quality - 62 segments
+002_101_0115 I DON'T REALLY REMEMBER SEEING THE FIRST LADY THAT DAY
+    excellent
+008_001_0042 THERE ARE A LOT OF GOOD FAMILIES LIVING THERE
+    excellent
+002_101_0149 WE ARE DOWN TO OUR BIG FINAL PRIZE CATEGORY
+    good: one slight segmentation error: fina | lprize
+008_001_0024 THEY WANT SOMEONE WHO CAN TEACH THEM RESPONSIBILITY
+    excellent
+008_008_0049 TORNADOES ARE THE MOST UNPREDICTABLE AND MOST VIOLENT OF STORMS
+    good: one biggish segmentation error: unpredictab | land
+
+
+
+
+
+
+ word whispered: 3.8 quality - 65 segments
+008_003_0138 NO PRESIDENT GOES UNCHALLENGED BY FOREIGN POLICY
+    good: one biggish segmentation error: unchallen | ged by
+008_002_0143 I AM GRATEFUL FOR THE CHANCE
+    good: many $ intrusions
+004_001_0110 STRATEGY CAME YESTERDAY AFTER HE MET WITH REPUBLICAN GOVERNORS IN WASHINGTON
+    fair: three biggish segmentation error: aft | erh, erh | eemet, governor | sin
+004_001_0120 STATE DEPARTMENT EMPLOYEES SNEAKED A LOOK AT HIS PASSPORT
+    good: one small segmentation error: department com | $
+008_003_0120 THE SUPREME COURT HAS HANDED BUSINESS AN IMPORTANT VICTORY
+    good: two small segmentation errors: has | s handed, busine | san
+(general: many more intrusions of $ as separate words here)
+
+
+
+
+
+
+ word silent: 3.4 quality - 57 segments
+008_003_0247: SHE'S RIGHT OVER HERE
+    excellent (can hear some words)
+008_002_0206: FEDERAL INVESTIGATORS ARE TREATING THEM LIKE SUSPECTS
+    excellent (can hear some words)
+004_001_0221: STRATEGY CAME YESTERDAY AFTER HE MET WITH REPUBLICAN GOVERNORS IN WASHINGTON
+    poor: yesterday too short; he too long; with waaay too long; Washington too long (can hear some words)
+004_001_0228: THE HOUSE MAJORITY LEADER ADMITTED HIS PARTY HAS A PUBLIC RELATIONS PROBLEM ON MINIMUM WAGES
+    poor: leader too short; his too long; has waaay too long; minimum too short; wages waaay too long (can't hear words)
+008_003_0232: YOU ARE MORE OPTIMISTIC THAN I AM
+    good: I is too short and "am" actually contains "I am" (can hear some words)
+
+
+
+
+
+
+ phone audible: 3.6 quality - 194 segments
+002_101_0115 I DON'T REALLY REMEMBER SEEING THE FIRST LADY THAT DAY
+    excellent
+008_001_0042 THERE ARE A LOT OF GOOD FAMILIES LIVING THERE
+    good: r | r aa, dh | dh ey, 
+002_101_0149 WE ARE DOWN TO OUR BIG FINAL PRIZE CATEGORY
+    fair: w | wiy, aw | aw axr, b | b ih, 
+008_001_0024 THEY WANT SOMEONE WHO CAN TEACH THEM RESPONSIBILITY
+    good: t | tiy, ch | chdh
+008_008_0049 TORNADOES ARE THE MOST UNPREDICTABLE AND MOST VIOLENT OF STORMS
+    poor: dh | dh ax, ax | ax m, v | v ay l | l, s | s t, ao | ao r, 
+
+note the accented English means that the there is noise in the labels -- e.g., ao isn't produced as ao, uh isn't produced as uh, and so on.
+
+also note that there is correlation between bad phone labels and bad word labels -- the sampled examples with more phone problems also have more problems with words, and vice versa
+
+
+
+
+ phone whispered - 0.8 quality, 194 segments
+008_003_0138 NO PRESIDENT GOES UNCHALLENGED BY FOREIGN POLICY
+    poor: l | l ih, aa | aa r, f | p, n | s, sil | ly, and more; falls apart on "policy"
+008_002_0143 I AM GRATEFUL FOR THE CHANCE
+    zilch: extra ax, SIL | g r ay, g | t, r | f, ao | t, axr | ch, SIL | ax, dh | s, falls totally apart after "I" such that phones no longer make any sense
+004_001_0110 STRATEGY CAME YESTERDAY AFTER HE MET WITH REPUBLICAN GOVERNORS IN WASHINGTON
+    awful: ey | ey ae, SIL = W, ih | ih k , k | k ax,  SIL | g, "Governors in Washington" totally falls apart and doesn't even have all the words or sounds in the approximately right order
+004_001_0120 STATE DEPARTMENT EMPLOYEES SNEAKED A LOOK AT HIS PASSPORT
+    awful: s | s t, p | p aa, n | ntem, SIL | look , l | uh k, ae t | his, z | pass, "at his passport" totally falls apart and doesn't even have all the words
+008_003_0120 THE SUPREME COURT HAS HANDED BUSINESS AN IMPORTANT VICTORY
+    zilch: iy | suh, sil | uh, s | preem, m | cour, s | t, r | h, y | h, uw | han, and so on -- totally falls apart from the beginning with phones that don't agree or make sense
+
+
+
+ 008_003_0138.pkl
+   1 SIL
+   2 N
+   3 OW
+   4 P
+   5 R
+   6 EH
+   7 Z
+   8 IH
+   9 D
+  10 AX
+  11 N
+  12 T
+  13 G
+  14 OW
+  15 Z
+  16 AH
+  17 N
+  18 CH
+  19 AE
+  20 L
+  21 IH
+  22 N
+  23 JH
+  24 D
+  25 B
+  26 AY
+  27 F
+  28 AA
+  29 R
+  30 AX
+  31 N
+  32 F
+  33 R
+  34 AX
+  35 N
+  36 SIL
+  37 P
+  38 ?
+
+ 008_002_0143.pkl
+   1 SIL
+   2 AY
+   3 AE
+   4 M
+   5 AX
+   6 M
+   7 SIL
+   8 G
+   9 R
+  10 T
+  11 XL
+  12 F
+  13 AO
+  14 F
+  15 AXR
+  16 SIL
+  17 DH
+  18 ?
+
+ 004_001_0110.pkl
+   1 S
+   2 T
+   3 R
+   4 AE
+   5 T
+   6 AX
+   7 JH
+   8 IY
+   9 K
+  10 EY
+  11 M
+  12 Y
+  13 EH
+  14 S
+  15 T
+  16 AXR
+  17 D
+  18 EY
+  19 AE
+  20 F
+  21 T
+  22 AXR
+  23 HH
+  24 IY
+  25 M
+  26 EH
+  27 T
+  28 SIL
+  29 W
+  30 IH
+  31 DH
+  32 W
+  33 IH
+  34 TH
+  35 SIL
+  36 R
+  37 IH
+  38 P
+  39 B
+  40 IH
+  41 K
+  42 AX
+  43 N
+  44 SIL
+  45 G
+  46 V
+  47 N
+  48 Z
+  49 G
+  50 AH
+  51 V
+  52 AXR
+  53 N
+  54 AXR
+  55 Z
+  56 ?
+
+ 004_001_0120.pkl
+   1 S
+   2 T
+   3 EY
+   4 T
+   5 D
+   6 IH
+   7 P
+   8 AA
+   9 R
+  10 T
+  11 M
+  12 AX
+  13 N
+  14 T
+  15 SIL
+  16 EH
+  17 M
+  18 P
+  19 L
+  20 OY
+  21 IY
+  22 Z
+  23 S
+  24 N
+  25 IY
+  26 K
+  27 T
+  28 AX
+  29 EY
+  30 SIL
+  31 L
+  32 UH
+  33 K
+  34 SIL
+  35 AE
+  36 T
+  37 HH
+  38 IH
+  39 Z
+  40 SIL
+  41 P
+  42 AE
+  43 S
+  44 ?
+
+ 008_003_0120.pkl
+   1 SIL
+   2 DH
+   3 AX
+   4 IY
+   5 SIL
+   6 S
+   7 AX
+   8 R
+   9 M
+  10 S
+  11 UW
+  12 R
+  13 M
+  14 S
+  15 Y
+  16 UW
+  17 R
+  18 M
+  19 SIL
+  20 K
+  21 AO
+  22 T
+  23 SIL
+  24 AE
+  25 Z
+  26 HH
+  27 AE
+  28 N
+  29 AX
+  30 D
+  31 HH
+  32 AE
+  33 D
+  34 AX
+  35 D
+  36 SIL
+  37 B
+  38 ?
+
+ phone silent - 0.2 quality, 188 segments
+extremely hard to tell.
+008_003_0247 SHE'S RIGHT OVER HERE
+    awful: iy | h iy (but the sequence seems to match up)
+008_002_0206 FEDERAL INVESTIGATORS ARE TREATING THEM LIKE SUSPECTS
+    zilch: the sequence of phones detected makes no sense -- pieces get repeated like "dh-m-dh-eh-m-sil-unk" (and like in that example, the phone sequence doesn't end where the sentence does)
+004_001_0221 STRATEGY CAME YESTERDAY AFTER HE MET WITH REPUBLICAN GOVERNORS IN WASHINGTON
+    zilch: ae and t sound influenced by s, axr is way too long, hh is way too long, w is waaaay too long; the sequence of phones doesn't make sense toward the end
+004_001_0228 THE HOUSE MAJORITY LEADER ADMITTED HIS PARTY HAS A PUBLIC RELATIONS PROBLEM ON MINIMUM WAGES
+    zilch: the sequence of phones detected doesn't map to the sentence provided; axr way too long, m, t way too long, 
+008_003_0232 YOU ARE MORE OPTIMISTIC THAN I AM
+    zilch: t | s, dh | I am, phone sequence doesn't make sense
+
+
+
+
+
+
+ 008_003_0247.pkl
+   1 SIL
+   2 SH
+   3 IY
+   4 Z
+   5 R
+   6 AY
+   7 T
+   8 OW
+   9 V
+  10 AXR
+  11 HH
+  12 IY
+  13 R
+  14 SIL
+  15 ?
+
+ 008_002_0206.pkl
+   1 SIL
+   2 F
+   3 EH
+   4 D
+   5 AXR
+   6 XL
+   7 EH
+   8 R
+   9 XL
+  10 SIL
+  11 IH
+  12 N
+  13 V
+  14 EH
+  15 S
+  16 IH
+  17 EY
+  18 Z
+  19 AA
+  20 R
+  21 AXR
+  22 SIL
+  23 T
+  24 R
+  25 T
+  26 NG
+  27 SIL
+  28 DH
+  29 M
+  30 DH
+  31 EH
+  32 M
+  33 SIL
+  34 ?
+
+ 004_001_0221.pkl
+   1 S
+   2 T
+   3 R
+   4 AE
+   5 T
+   6 AX
+   7 JH
+   8 IY
+   9 SIL
+  10 K
+  11 EY
+  12 M
+  13 Y
+  14 EH
+  15 S
+  16 T
+  17 AXR
+  18 D
+  19 EY
+  20 AE
+  21 F
+  22 T
+  23 AXR
+  24 HH
+  25 IY
+  26 M
+  27 EH
+  28 T
+  29 W
+  30 IH
+  31 DH
+  32 W
+  33 TH
+  34 SIL
+  35 R
+  36 IH
+  37 AH
+  38 L
+  39 K
+  40 AX
+  41 N
+  42 SIL
+  43 G
+  44 AH
+  45 AX
+  46 AXR
+  47 Z
+  48 G
+  49 AH
+  50 V
+  51 AXR
+  52 N
+  53 AXR
+  54 Z
+  55 ?
+
+ 004_001_0228.pkl
+   1 DH
+   2 AX
+   3 IY
+   4 SIL
+   5 HH
+   6 S
+   7 HH
+   8 AW
+   9 Z
+  10 SIL
+  11 M
+  12 JH
+  13 R
+  14 T
+  15 IY
+  16 SIL
+  17 L
+  18 IY
+  19 AXR
+  20 SIL
+  21 AE
+  22 M
+  23 T
+  24 AX
+  25 D
+  26 AE
+  27 M
+  28 T
+  29 D
+  30 SIL
+  31 IH
+  32 Z
+  33 SIL
+  34 P
+  35 R
+  36 IY
+  37 SIL
+  38 HH
+  39 AE
+  40 Z
+  41 SIL
+  42 AX
+  43 EY
+  44 SIL
+  45 P
+  46 AH
+  47 L
+  48 K
+  49 R
+  50 IH
+  51 L
+  52 EY
+  53 SH
+  54 AX
+  55 Z
+  56 SIL
+  57 P
+  58 R
+  59 AA
+  60 B
+  61 ?
+
+ 008_003_0232.pkl
+   1 SIL
+   2 Y
+   3 UW
+   4 SIL
+   5 R
+   6 AXR
+   7 SIL
+   8 M
+   9 R
+  10 SIL
+  11 AA
+  12 P
+  13 T
+  14 AX
+  15 IH
+  16 T
+  17 K
+  18 SIL
+  19 DH
+  20 N
+  21 DH
+  22 AX
+  23 ?
