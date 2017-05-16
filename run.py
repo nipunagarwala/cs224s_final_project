@@ -27,10 +27,11 @@ def create_simple_model():
     return model
 
 def train_model(model, args):
-    logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_data)
-
     model_config = model.get_config()
+    
+    logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
+    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_path)
+
 
     with tf.Graph().as_default():
         init = tf.global_variables_initializer()
@@ -78,6 +79,7 @@ def test_model(model, args):
   
 def main(args):
     model = create_simple_model()
+    print(args)
     if args.phase == 'train':
         train_model(model, args)
     if args.phase == 'test':
