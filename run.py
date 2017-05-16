@@ -29,11 +29,13 @@ def create_simple_model(num_features, cell_type):
 
     return model
 
-def train_model(model, args):
-    model_config = model.get_config()
-    
+def train_model(args):
+    model = create_simple_model(100, 'lstm')
     logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_path)
+    samples, sample_lens, transcripts = extract_all_features(os.getcwd()+args.train_path, "spectrogram")
+    batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, 32)
+    model = create_simple_model(train_data_batches.shape[1], 'lstm')
+    model_config = model.get_config()
 
     with tf.Graph().as_default():
         init = tf.global_variables_initializer()

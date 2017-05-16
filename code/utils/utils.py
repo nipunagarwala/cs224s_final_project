@@ -3,10 +3,6 @@ import sys
 import os
 import argparse
 import glob
-<<<<<<< HEAD
-=======
-#import preprocess
->>>>>>> 25c37507b9d80d4a915f229676ac67b95502ecab
 
 def parse_commandline():
     """

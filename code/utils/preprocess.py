@@ -299,7 +299,7 @@ def extract_all_features(directory, feature_type):
     transcripts = []
     phone_labels = []
 
-    with open(os.path.join(directory, "utteranceInfoSample.pkl"), "rb") as f:
+    with open(os.path.join(directory, "utteranceInfo.pkl"), "rb") as f:
         meta = pickle.load(f)
         
     for i, utterance in meta.iterrows():
