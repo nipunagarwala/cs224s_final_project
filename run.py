@@ -43,7 +43,7 @@ def train_model(args):
 
 
     with tf.Graph().as_default():
-        model = create_simple_model(batched_samples[0].shape[2], num_encodings, 'lstm')
+        model = create_simple_model(samples.shape[2], num_encodings, 'lstm')
         print("Finished creating the model ...")
         model_config = model.get_config()
         init = tf.global_variables_initializer()
@@ -65,7 +65,6 @@ def train_model(args):
             n_batches = int(len(samples) / BATCH_SIZE)
             for curr_epoch in range(model_config.num_epochs):
                 batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, BATCH_SIZE)
-                print("Finished batching the data ...")
 
                 total_train_cost = total_train_wer = 0
                 start = time.time()
