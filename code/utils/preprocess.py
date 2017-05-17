@@ -304,7 +304,7 @@ def extract_all_features(directory, feature_type, session_type=None):
         meta = pickle.load(f)
         
     for i, utterance in meta.iterrows():
-        if utterance["mode"] != session_type:
+        if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
         features, phones = extract_features(pkl_filename, feature_type)
