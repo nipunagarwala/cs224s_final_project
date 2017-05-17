@@ -277,7 +277,7 @@ def extract_features(pkl_filename, feature_type):
     else:
         raise RuntimeError("Invalid feature type specified")
 
-def extract_all_features(directory, feature_type):
+def extract_all_features(directory, feature_type, session_type=None):
     """
     Extracts features from all files in a given directory according to the 
 
@@ -285,6 +285,8 @@ def extract_all_features(directory, feature_type):
         directory: a directory containing utteranceInfo.pkl and the pkl files
             for all utterances specified in utteranceInfo.pkl.
         feature_type: either "wand", "wand_lda", or "spectrogram".
+        session_type: "audible", "whispered", or "silent". if None, extracts
+            features for all sessions.
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, n_features, max_timesteps).
@@ -302,6 +304,8 @@ def extract_all_features(directory, feature_type):
         meta = pickle.load(f)
         
     for i, utterance in meta.iterrows():
+        if utterance["mode"] != session_type:
+            continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
         features, phones = extract_features(pkl_filename, feature_type)
         transcript = utterance["transcript"]
