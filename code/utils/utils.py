@@ -22,8 +22,8 @@ def parse_commandline():
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
     parser.add_argument('--train_path', nargs='?', default='./data/hw3_train.dat', type=str, help="Give path to training data")
     parser.add_argument('--val_path', nargs='?', default='./data/hw3_val.dat', type=str, help="Give path to val data")
-    parser.add_argument('--save_every', nargs='?', default=None, type=int, help="Save model every x iterations. Default is not saving at all.")
-    parser.add_argument('--save_to_file', nargs='?', default='saved_models/saved_model_epoch', type=str, help="Provide filename prefix for saving intermediate models")
+    parser.add_argument('--save_every', nargs='?', default=2, type=int, help="Save model every x iterations. Default is not saving at all.")
+    parser.add_argument('--save_to_file', nargs='?', default=os.getcwd()+ '/' + 'checkpoints/model_ckpt', type=str, help="Provide filename prefix for saving intermediate models")
     parser.add_argument('--load_from_file', nargs='?', default=None, type=str, help="Provide filename to load saved model")
     args = parser.parse_args()
     return args
@@ -52,8 +52,6 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
 
     n_batches = int(len(samples) / batch_size)
 
-    print(samples.shape)
-
     batched_samples = []
     batched_sample_lens = []
     batched_transcripts = []
@@ -61,25 +59,52 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
     for i in range(n_batches):
         batched_samples.append(samples[i*batch_size: (i+1)*batch_size])
         batched_sample_lens.append(sample_lens[i*batch_size: (i+1)*batch_size])
-        batched_transcripts.append(transcripts[i*batch_size: (i+1)*batch_size])
+        batched_transcripts.append(sparse_tuple_from(transcripts[i*batch_size: (i+1)*batch_size]))
 
     return batched_samples, batched_sample_lens, batched_transcripts
 
 
+def sparse_tuple_from(sequences, dtype=np.int32):
+    """Create a sparse representention of x.
+    Args:
+        sequences: a list of lists of type dtype where each element is a sequence
+    Returns:
+        A tuple with (indices, values, shape)
+    """
+    indices = []
+    values = []
+
+    for n, seq in enumerate(sequences):
+        indices.extend(zip([n]*len(seq), range(len(seq))))
+        values.extend(seq)
+
+    indices = np.asarray(indices, dtype=np.int64)
+    values = np.asarray(values, dtype=dtype)
+    shape = np.asarray([len(sequences), np.asarray(indices).max(0)[1]+1], dtype=np.int64)
+
+    return indices, values, shape
+
 def convert_to_encodings(target_data):
-    char_set = set()
-    for i in xrange(target_data.shape[0]):
-        new_set = set(target_data)
-        char_set.union(new_set)
+
+    char_set = set('A')
+    for i in range(target_data.shape[0]):
+        new_set = set(target_data[i])
+        char_set |= new_set
 
     char_list = list(char_set)
-    encodings = xrange(len(char_list))
+    encodings = range(len(char_list))
+
+
     encoded_targets = []
 
-    for t in xrange(len(target_data)):
-        for i in xrange(len(char_list)):
-            if char_list[i] in target_data[t]:
-                encoded_targets.append(map(int,list(target[t].replace(ch,encodings[i]))))
+    for t in range(target_data.shape[0]):
+        cur_target = list(target_data[t])
+        for i in range(len(char_list)):
+            for s in range(len(cur_target)):
+                if cur_target[s] == char_list[i]:
+                    cur_target[s] = encodings[i]
 
-    return encoded_targets
+        encoded_targets.append(list(cur_target))
+
+    return encoded_targets, len(encodings)
 

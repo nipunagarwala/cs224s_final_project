@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import os
 import tensorflow as tf
+import math
 
 
 class Config(object):
@@ -13,7 +14,7 @@ class Config(object):
         self.hidden_size = 128
         self.num_epochs = 50
         self.num_layers = 3
-        self.num_classes = 20
+        self.num_classes = 28 #Can change depending on the dataset
         self.num_features = 100 #TO FIX!!!!
         self.max_norm = 10
 
@@ -22,8 +23,10 @@ class SimpleAcousticNN(object):
     """
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
     """
-    def __init__(self, num_features=100, cell_type='lstm'):
+    def __init__(self, num_features=100, num_encodings=1, cell_type='lstm'):
         self.config = Config()
+        self.config.num_features = num_features
+        self.config.num_classes = num_encodings+1
         self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, num_features))
         self.targets_placeholder = tf.sparse_placeholder(tf.int32)
         self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
@@ -97,13 +100,14 @@ class SimpleAcousticNN(object):
         self.merged_summary_op = tf.summary.merge_all()
 
     def add_feed_dict(self, input_batch, target_batch, seq_batch):
-        self.feed_dict = {self.inputs_placeholder:input_batch, self.targets_placeholder:target_batch,
-                            self.seq_len_placeholder:seq_batch}
+        feed_dict = {self.inputs_placeholder:input_batch, self.targets_placeholder:target_batch,
+                            self.seq_lens_placeholder:seq_batch}
+        return feed_dict
 
     def train_one_batch(self, session, input_batch, target_batch, seq_batch,  train=True):
-        self.add_feed_dict(input_batch, target_batch, seq_batch)
+        feed_dict = self.add_feed_dict(input_batch, target_batch, seq_batch)
         _,batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, self.loss, self.wer, 
-                                            self.num_valid_examples, self.merged_summary_op], self.feed_dict)
+                                            self.num_valid_examples, self.merged_summary_op], feed_dict)
 
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0

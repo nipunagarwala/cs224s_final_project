@@ -8,6 +8,7 @@ import os
 import math
 import random
 import tensorflow as tf
+import time
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 from code.models import *
@@ -16,11 +17,12 @@ from time import gmtime, strftime
 from code.utils.utils import parse_commandline
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches
+from code.utils.utils import convert_to_encodings
 
 BATCH_SIZE = 32
 
-def create_simple_model(num_features, cell_type):
-    model = SimpleAcousticNN(num_features, cell_type)
+def create_simple_model(num_features, num_encodings, cell_type):
+    model = SimpleAcousticNN(num_features,num_encodings, cell_type)
     model.build_model()
     model.add_loss_op()
     model.add_optimizer_op()
@@ -31,36 +33,50 @@ def create_simple_model(num_features, cell_type):
 
 def train_model(args):
     logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-    samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "spectrogram")
+    samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "wand")
+    print("Finished reading files and extracting features ...")
 
-    batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, 32)
+    samples = np.transpose(samples, (0, 2, 1))
+    transcripts, num_encodings = convert_to_encodings(transcripts)
+    print("Finished converting targets into encodings ...")
 
-    model = create_simple_model(batched_samples[0].shape[1], 'lstm')
-    model_config = model.get_config()
+
 
     with tf.Graph().as_default():
+        model = create_simple_model(batched_samples[0].shape[2], num_encodings, 'lstm')
+        print("Finished creating the model ...")
+        model_config = model.get_config()
         init = tf.global_variables_initializer()
+        saver = tf.train.Saver(tf.trainable_variables())
+
         with tf.Session() as session:
             session.run(init)
             if args.load_from_file is not None:
                 new_saver = tf.train.import_meta_graph('%s.meta'%args.load_from_file, clear_devices=True)
                 new_saver.restore(session, args.load_from_file)
-            saver = tf.train.Saver(tf.trainable_variables())
+                print("Finished importing the saved model ...")
+
+            saver = tf.train.Saver()
 
             train_writer = tf.summary.FileWriter(logs_path + '/train', session.graph)
             global_start = time.time()
             step_ii = 0
+
+            n_batches = int(len(samples) / BATCH_SIZE)
             for curr_epoch in range(model_config.num_epochs):
-                batched_samples, batched_sample_lens, batched_transcripts = utils.make_batches(samples, sample_lens, transcripts, BATCH_SIZE)
-                encoded_transcripts = utils.convert_to_encodings(batched_transcripts)
+                batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, BATCH_SIZE)
+                print("Finished batching the data ...")
+
                 total_train_cost = total_train_wer = 0
                 start = time.time()
 
                 epoch_loss_avg = 0
                 epoch_wer_avg = 0
                 cur_batch_iter = 0
-                for cur_batch in random.sample(range(num_batches_per_epoch),num_batches_per_epoch):
-                    batch_cost, wer, summary = model.train_one_batch(self, session, batched_samples, encoded_transcripts, batched_sample_lens)
+                for cur_batch_iter in range(n_batches):
+                    # print(batched_transcripts[cur_batch_iter])
+                    batch_cost, wer, summary = model.train_one_batch(session, batched_samples[cur_batch_iter], 
+                                                batched_transcripts[cur_batch_iter], batched_sample_lens[cur_batch_iter])
                     train_writer.add_summary(summary, step_ii)
                     step_ii += 1 
                     epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
@@ -85,7 +101,6 @@ def test_model(model, args):
 
   
 def main(args):
-    print(args)
     if args.phase == 'train':
         train_model(args)
     if args.phase == 'test':
