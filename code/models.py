@@ -28,11 +28,11 @@ class SimpleAcousticNN(object):
         self.targets_placeholder = tf.sparse_placeholder(tf.int32)
         self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
         if cell_type == 'rnn':
-            self.cell = tf.contrib.rnn.RNNCell(num_units = self.config.hidden_size)
+            self.cell = tf.contrib.rnn.RNNCell
         elif cell_type == 'gru':
-            self.cell = tf.contrib.rnn.GRUCell(num_units = self.config.hidden_size)
+            self.cell = tf.contrib.rnn.GRUCell
         elif cell_type == 'lstm':
-            self.cell = tf.contrib.rnn.LSTMCell(num_units = self.config.hidden_size)
+            self.cell = tf.contrib.rnn.LSTMCell
         else:
             raise ValueError('Input correct cell type')
 
@@ -42,7 +42,8 @@ class SimpleAcousticNN(object):
                             initializer=tf.contrib.layers.xavier_initializer())
         b = tf.get_variable("Bias", shape=[self.config.num_classes])
 
-        rnnNet = tf.contrib.rnn.MultiRNNCell([self.cell] *self.config.num_layers)
+        rnnNet = tf.contrib.rnn.MultiRNNCell([self.cell(num_units = self.config.hidden_size) for _ in 
+                                            range(self.config.num_layers)], state_is_tuple=True)
         (rnnNet_out, rnnNet_state) = tf.nn.dynamic_rnn(cell = rnnNet, inputs=self.inputs_placeholder,
                         sequence_length=self.seq_lens_placeholder,dtype=tf.float32)
 
