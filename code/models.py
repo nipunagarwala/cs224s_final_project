@@ -11,7 +11,7 @@ class Config(object):
         self.batch_size = 64
         self.lr = 1e-3
         self.l2_lambda = 0.0000001
-        self.hidden_size = 128
+        self.hidden_size = 256
         self.num_epochs = 50
         self.num_layers = 3
         self.num_classes = 28 #Can change depending on the dataset

@@ -79,7 +79,7 @@ def train_model(args):
                     train_writer.add_summary(summary, step_ii)
                     step_ii += 1 
                     epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
-                    epoch_wer_avg += (batch_cost - epoch_wer_avg)/(cur_batch_iter+1)
+                    epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
 
                     log = "Epoch {}/{}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
                     print(log.format(curr_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
@@ -89,13 +89,37 @@ def train_model(args):
 
 
 def test_model(model, args):
-    if args.load_from_file is not None:
-        new_saver = tf.train.import_meta_graph('%s.meta'%args.load_from_file, clear_devices=True)
-        new_saver.restore(session, args.load_from_file)
-    else:
-        raise ValueError('No pre-trained model found!')
 
+    samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "wand")
+    samples = np.transpose(samples, (0, 2, 1))
+    transcripts, num_encodings = convert_to_encodings(transcripts)
     train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_path, BATCH_SIZE)
+
+    with tf.Session() as session:
+            session.run(init)
+            if args.load_from_file is not None:
+                new_saver = tf.train.import_meta_graph('%s.meta'%args.load_from_file, clear_devices=True)
+                new_saver.restore(session, args.load_from_file)
+            else:
+                raise ValueError('No pre-trained model found!')
+
+            saver = tf.train.Saver()
+
+            global_start = time.time()
+            step_ii = 0
+            n_batches = int(len(samples) / BATCH_SIZE)
+            for cur_batch_iter in range(n_batches):
+                # print(batched_transcripts[cur_batch_iter])
+                batch_cost, wer, summary = model.test_one_batch(session, batched_samples[cur_batch_iter], 
+                                            batched_transcripts[cur_batch_iter], batched_sample_lens[cur_batch_iter])
+                train_writer.add_summary(summary, step_ii)
+                step_ii += 1 
+                epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
+                epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
+
+                log = "Test_cost = {:.3f}, Test_wer = {:.3f}, time = {:.3f}"
+                print(log.format(curr_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
+
 
 
   
