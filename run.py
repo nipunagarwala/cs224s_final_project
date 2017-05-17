@@ -34,7 +34,8 @@ def train_model(args):
     samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "spectrogram")
 
     batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, 32)
-    model = create_simple_model(train_data_batches.shape[1], 'lstm')
+
+    model = create_simple_model(batched_samples[0].shape[1], 'lstm')
     model_config = model.get_config()
 
     with tf.Graph().as_default():

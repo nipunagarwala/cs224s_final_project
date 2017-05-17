@@ -52,9 +52,16 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
 
     n_batches = int(len(samples) / batch_size)
 
-    batched_samples = make_batch(samples[p], n_batches, batch_size)
-    batched_sample_lens = make_batch(sample_lens[p], n_batches, batch_size)
-    batched_transcripts = make_batch(transcripts[p], n_batches, batch_size)
+    print(samples.shape)
+
+    batched_samples = []
+    batched_sample_lens = []
+    batched_transcripts = []
+
+    for i in range(n_batches):
+        batched_samples.append(samples[i*batch_size: (i+1)*batch_size])
+        batched_sample_lens.append(sample_lens[i*batch_size: (i+1)*batch_size])
+        batched_transcripts.append(transcripts[i*batch_size: (i+1)*batch_size])
 
     return batched_samples, batched_sample_lens, batched_transcripts
 
