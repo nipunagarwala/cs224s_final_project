@@ -13,7 +13,8 @@ import numpy as np
 import tensorflow as tf
 from time import gmtime, strftime
 
-from code.models import *
+from code.config import Config
+from code.models import SimpleEmgNN
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches
 from code.utils.utils import convert_to_encodings
@@ -21,15 +22,15 @@ from code.utils.utils import convert_to_encodings
 
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-BATCH_SIZE = 32
 
 
 # python run.py --train sample-data/train
 
 
 
+
 def create_simple_model(num_features, num_encodings, cell_type):
-    model = SimpleEmgNN(num_features,num_encodings, cell_type)
+    model = SimpleEmgNN(Config, num_features, num_encodings, cell_type)
 
     return model
 
@@ -47,7 +48,6 @@ def train_model(args):
         print("Creating model")
         model = create_simple_model(samples.shape[2], num_encodings, 'lstm')
         print("Finished creating the model ...")
-        model_config = model.get_config()
         init = tf.global_variables_initializer()
         
         with tf.Session() as session:
@@ -61,13 +61,13 @@ def train_model(args):
             global_start = time.time()
             step_ii = 0
 
-            n_batches = int(len(samples) / BATCH_SIZE)
+            n_batches = int(len(samples) / Config.batch_size)
             if n_batches < 1:
-                raise ValueError("Must have at least one batch of size %d to train model, but there are only %d datapoints available " % (BATCH_SIZE, len(samples)))
+                raise ValueError("Must have at least one batch of size %d to train model, but there are only %d datapoints available " % (Config.batch_size, len(samples)))
                 
-            for cur_epoch in range(model_config.num_epochs):
+            for cur_epoch in range(Config.num_epochs):
                 print("epoch", cur_epoch)
-                batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, BATCH_SIZE)
+                batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, Config.batch_size)
 
                 total_train_cost = total_train_wer = 0
                 start = time.time()
@@ -76,7 +76,7 @@ def train_model(args):
                 epoch_wer_avg = 0
                 cur_batch_iter = 0
                 for cur_batch_iter in range(n_batches):
-                    print(batched_transcripts[cur_batch_iter])
+                    #print(batched_transcripts[cur_batch_iter])
                     batch_cost, wer, summary = model.train_one_batch(session, 
                                                     batched_samples[cur_batch_iter], 
                                                     batched_transcripts[cur_batch_iter], 
@@ -88,7 +88,7 @@ def train_model(args):
 
                     # Show information to user
                     log = "Epoch {}/{}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
-                    print(log.format(cur_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
+                    print(log.format(cur_epoch+1, Config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
 
                     global_step = model.global_step.eval()
 
@@ -104,7 +104,7 @@ def test_model(model, args):
     samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "wand")
     samples = np.transpose(samples, (0, 2, 1))
     transcripts, num_encodings = convert_to_encodings(transcripts)
-    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_path, BATCH_SIZE)
+    train_data_batches, train_labels_batches, train_seq_batches = make_batches(args.train_path, Config.batch_size)
 
     with tf.Session() as session:
             session.run(init)
@@ -118,7 +118,7 @@ def test_model(model, args):
 
             global_start = time.time()
             step_ii = 0
-            n_batches = int(len(samples) / BATCH_SIZE)
+            n_batches = int(len(samples) / Config.batch_size)
             for cur_batch_iter in range(n_batches):
                 # print(batched_transcripts[cur_batch_iter])
                 batch_cost, wer, summary = model.test_one_batch(session, batched_samples[cur_batch_iter], 
@@ -129,7 +129,7 @@ def test_model(model, args):
                 epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
 
                 log = "Test_cost = {:.3f}, Test_wer = {:.3f}, time = {:.3f}"
-                print(log.format(curr_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
+                print(log.format(curr_epoch+1, Config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
 
 
 def parse_commandline():

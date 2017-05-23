@@ -4,31 +4,13 @@ import os
 import tensorflow as tf
 import math
 
-
-class Config(object):
-
-    def __init__(self):
-        self.batch_size = 64
-        self.lr = 1e-3
-        self.l2_lambda = 0.0000001
-        self.hidden_size = 256
-        self.num_epochs = 1 #50
-        self.num_layers = 3
-        self.num_classes = 28 #Can change depending on the dataset
-        self.num_features = 100 #TO FIX!!!!
-        self.max_norm = 10
-        
-    checkpoint_dir = "checkpoints/checkpoint.ckpt"
-    steps_per_checkpoint = 1
-    freq_of_longterm_checkpoint = 0.5     # in hours
-
-
 class SimpleEmgNN(object):
     """
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
     """
-    def __init__(self, num_features=100, num_encodings=1, cell_type='lstm'):
-        self.config = Config()
+    def __init__(self, config, num_features=100, num_encodings=1, cell_type='lstm'):
+        self.config = config
+        
         self.config.num_features = num_features
         self.config.num_classes = num_encodings+1
         self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, num_features))
@@ -92,8 +74,11 @@ class SimpleEmgNN(object):
         self.loss = self.config.l2_lambda * l2_cost + cost
 
     def add_optimizer_op(self):
+        # Clips by global norm
+        # This can be slow -- if we run into speed trouble, check out 
+        # the gradient clipping docs
         tvars = tf.trainable_variables()
-        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars),self.config.max_norm)
+        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), self.config.max_norm)
         optimizer = tf.train.AdamOptimizer(self.config.lr)
         self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
         
