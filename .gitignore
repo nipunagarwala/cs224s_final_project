@@ -91,3 +91,5 @@ ENV/
 
 # Extra data
 data
+checkpoints
+context
