@@ -12,7 +12,15 @@ class Config(object):
     ##########################
     # Data
     ##########################
+    # What type of features to extract from the data
+    # Valid feature_types: "wand_lda", "wand", "spectrogram"
+    feature_type = "wand"
+    
+    # Number of features 
+    # TODO this depends on type of feature selected;
+    # shouldn't be hardcoded
     num_features = 525 
+    
     # Num classes is (vocabulary size + 1),
     # with the 1 reflecting the BLANK character for CTC
     num_classes = 26 
@@ -23,8 +31,13 @@ class Config(object):
     ##########################
     # Model architecture
     ##########################
+    # Size of hidden layers in model
     hidden_size = 256
+    
+    # Number of hidden layers in model
     num_layers = 3
+    
+    # Cell type to use
     # Valid cell types: 'lstm', 'rnn', 'gru'
     cell_type = 'lstm' 
     

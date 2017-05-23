@@ -34,8 +34,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 def create_model(session, restore):
     """
-    Returns model that has been initialized in `session`.
-    
+    Returns a model, which has been initialized in `session`.
     Re-opens saved model if so instructed; otherwise creates 
     a new model from scratch.
     """
@@ -58,7 +57,7 @@ def create_model(session, restore):
 
 def train_model(args):
     print("Extracting features")
-    samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "wand")
+    samples, sample_lens, transcripts = extract_all_features(args.train_path, Config.feature_type)
     print("Finished reading files and extracting features ...")
 
     samples = np.transpose(samples, (0, 2, 1))
@@ -67,9 +66,10 @@ def train_model(args):
 
     with tf.Graph().as_default():
         with tf.Session() as session:
+            # Create or restore model
             model = create_model(session, args.restore)
             
-            # Create a tensorboard writer
+            # Create a tensorboard writer for this session
             logs_path = os.path.join(Config.tensorboard_dir, 
                              strftime("%Y_%m_%d_%H_%M_%S", gmtime()), "train")
             train_writer = tf.summary.FileWriter(logs_path, session.graph)
@@ -93,7 +93,9 @@ def train_model(args):
                     log = "Epoch {}/{}, overall step {}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
                     epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
                     epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
-                    print(log.format(cur_epoch+1, Config.num_epochs, global_step, 
+                    print(log.format(cur_epoch+1, 
+                                     Config.num_epochs, 
+                                     global_step, 
                                      epoch_loss_avg, epoch_wer_avg, 
                                      time.time() - epoch_start))
 
@@ -108,7 +110,6 @@ def train_model(args):
 
 
 def test_model(model, args):
-
     samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "wand")
     samples = np.transpose(samples, (0, 2, 1))
     transcripts, num_encodings = convert_to_encodings(transcripts)
