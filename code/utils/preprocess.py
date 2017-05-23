@@ -300,9 +300,13 @@ def extract_all_features(directory, feature_type, session_type=None):
     transcripts = []
     phone_labels = []
 
-    with open(os.path.join(directory, "utteranceInfo.pkl"), "rb") as f:
-        meta = pickle.load(f)
-        
+    meta_info_path = os.path.join(directory, "utteranceInfo.pkl")
+    try:
+        with open(meta_info_path, "rb") as f:
+            meta = pickle.load(f)
+    except FileNotFoundError:
+        print("Cannot open file %s -- check that directory to see if it needs to be renamed to the hardcoded path" % os.path.join(directory, "utteranceInfo.pkl"))
+    
     for i, utterance in meta.iterrows():
         if session_type is not None and utterance["mode"] != session_type:
             continue

@@ -2,43 +2,40 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import numpy as np 
 import sys
 import os
 import math
 import random
-import tensorflow as tf
 import time
 import argparse
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-from code.models import *
+
+import numpy as np 
+import tensorflow as tf
 from time import gmtime, strftime
 
+from code.models import *
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches
 from code.utils.utils import convert_to_encodings
 
+
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 BATCH_SIZE = 32
 
 
 # python run.py --train sample-data/train
-# 
 
 
 
 def create_simple_model(num_features, num_encodings, cell_type):
-    model = SimpleAcousticNN(num_features,num_encodings, cell_type)
-    model.build_model()
-    model.add_loss_op()
-    model.add_optimizer_op()
-    model.add_decoder_and_wer_op()
-    model.add_summary_op()
+    model = SimpleEmgNN(num_features,num_encodings, cell_type)
 
     return model
 
 def train_model(args):
     logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
+    print("Extracting features")
     samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "wand")
     print("Finished reading files and extracting features ...")
 
@@ -46,15 +43,13 @@ def train_model(args):
     transcripts, num_encodings = convert_to_encodings(transcripts)
     print("Finished converting targets into encodings ...")
 
-
-
     with tf.Graph().as_default():
+        print("Creating model")
         model = create_simple_model(samples.shape[2], num_encodings, 'lstm')
         print("Finished creating the model ...")
         model_config = model.get_config()
         init = tf.global_variables_initializer()
-        saver = tf.train.Saver(tf.trainable_variables())
-
+        
         with tf.Session() as session:
             session.run(init)
             if args.load_from_file is not None:
@@ -62,14 +57,16 @@ def train_model(args):
                 new_saver.restore(session, args.load_from_file)
                 print("Finished importing the saved model ...")
 
-            saver = tf.train.Saver()
-
             train_writer = tf.summary.FileWriter(logs_path + '/train', session.graph)
             global_start = time.time()
             step_ii = 0
 
             n_batches = int(len(samples) / BATCH_SIZE)
-            for curr_epoch in range(model_config.num_epochs):
+            if n_batches < 1:
+                raise ValueError("Must have at least one batch of size %d to train model, but there are only %d datapoints available " % (BATCH_SIZE, len(samples)))
+                
+            for cur_epoch in range(model_config.num_epochs):
+                print("epoch", cur_epoch)
                 batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, BATCH_SIZE)
 
                 total_train_cost = total_train_wer = 0
@@ -79,19 +76,27 @@ def train_model(args):
                 epoch_wer_avg = 0
                 cur_batch_iter = 0
                 for cur_batch_iter in range(n_batches):
-                    # print(batched_transcripts[cur_batch_iter])
-                    batch_cost, wer, summary = model.train_one_batch(session, batched_samples[cur_batch_iter], 
-                                                batched_transcripts[cur_batch_iter], batched_sample_lens[cur_batch_iter])
+                    print(batched_transcripts[cur_batch_iter])
+                    batch_cost, wer, summary = model.train_one_batch(session, 
+                                                    batched_samples[cur_batch_iter], 
+                                                    batched_transcripts[cur_batch_iter], 
+                                                    batched_sample_lens[cur_batch_iter])
                     train_writer.add_summary(summary, step_ii)
                     step_ii += 1 
                     epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
                     epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
 
+                    # Show information to user
                     log = "Epoch {}/{}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
-                    print(log.format(curr_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
+                    print(log.format(cur_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
 
-                if args.save_every is not None and args.save_to_file is not None and (curr_epoch + 1) % args.save_every == 0:
-                    saver.save(session, args.save_to_file, global_step=curr_epoch + 1)
+                    global_step = model.global_step.eval()
+
+                    # Save checkpoints
+                    if global_step % Config.steps_per_checkpoint == 0:
+                        print("saving", global_step)
+                        model.saver.save(session, Config.checkpoint_dir, 
+                                                global_step=model.global_step)
 
 
 def test_model(model, args):
@@ -137,7 +142,6 @@ def parse_commandline():
             phase : Train or Test
             train_path : Path for the training data
             val_path : Path for the testing data
-            save_every : (Int) How often to save the model
             save_to_file : (string) Path to file to save the model too
             load_from_file : (string) Path to load the model from
     """
@@ -145,8 +149,6 @@ def parse_commandline():
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
     parser.add_argument('--train_path', nargs='?', default='sample-data/train', type=str, help="Give path to training data")
     parser.add_argument('--val_path', nargs='?', default='sample-data/test', type=str, help="Give path to val data")
-    parser.add_argument('--save_every', nargs='?', default=2, type=int, help="Save model every x iterations. Default is not saving at all.")
-    parser.add_argument('--save_to_file', nargs='?', default=os.getcwd()+ '/' + 'checkpoints/model_ckpt', type=str, help="Provide filename prefix for saving intermediate models")
     parser.add_argument('--load_from_file', nargs='?', default=None, type=str, help="Provide filename to load saved model")
     args = parser.parse_args()
     return args

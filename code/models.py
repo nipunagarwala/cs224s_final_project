@@ -12,11 +12,15 @@ class Config(object):
         self.lr = 1e-3
         self.l2_lambda = 0.0000001
         self.hidden_size = 256
-        self.num_epochs = 50
+        self.num_epochs = 1 #50
         self.num_layers = 3
         self.num_classes = 28 #Can change depending on the dataset
         self.num_features = 100 #TO FIX!!!!
         self.max_norm = 10
+        
+    checkpoint_dir = "checkpoints/checkpoint.ckpt"
+    steps_per_checkpoint = 1
+    freq_of_longterm_checkpoint = 0.5     # in hours
 
 
 class SimpleEmgNN(object):
@@ -39,11 +43,17 @@ class SimpleEmgNN(object):
         else:
             raise ValueError('Input correct cell type')
 
+        self.global_step = tf.contrib.framework.get_or_create_global_step() 
+      
         self.build_model()
         self.add_loss_op()
         self.add_optimizer_op()
         self.add_decoder_and_wer_op()
         self.add_summary_op()
+        
+        # Needs to be last line -- graph must be created before saver is created
+        self.saver = tf.train.Saver(tf.global_variables(), 
+                           keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
 
     def build_model(self):
         W = tf.get_variable("Weights", shape=[self.config.hidden_size, self.config.num_classes],
@@ -85,7 +95,8 @@ class SimpleEmgNN(object):
         tvars = tf.trainable_variables()
         grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars),self.config.max_norm)
         optimizer = tf.train.AdamOptimizer(self.config.lr)
-        self.train_op = optimizer.apply_gradients(zip(grads, tvars)) 
+        self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
+        
 
     def add_decoder_and_wer_op(self):
         (all_decoded_sequence,log_probabilities) = tf.nn.ctc_beam_search_decoder(inputs=self.logits, sequence_length=self.seq_lens_placeholder,
@@ -111,7 +122,8 @@ class SimpleEmgNN(object):
 
     def train_one_batch(self, session, input_batch, target_batch, seq_batch,  train=True):
         feed_dict = self.add_feed_dict(input_batch, target_batch, seq_batch)
-        _,batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, self.loss, self.wer, 
+        _, batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, 
+                                            self.loss, self.wer, 
                                             self.num_valid_examples, self.merged_summary_op], feed_dict)
 
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
