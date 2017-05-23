@@ -4,7 +4,7 @@ class Config(object):
     ##########################
     # Checkpointing configuration
     ##########################
-    checkpoint_dir = "checkpoints/checkpoint.ckpt"
+    checkpoint_dir = "checkpoints"
     steps_per_checkpoint = 1
     freq_of_longterm_checkpoint = 0.5     # in hours
     
@@ -24,7 +24,7 @@ class Config(object):
     # Training options
     ##########################
     num_epochs = 1 #50
-    batch_size = 2 #32
+    batch_size = 32 #32
     lr = 1e-3
     l2_lambda = 1e-7
     

@@ -24,8 +24,8 @@ from code.utils.utils import convert_to_encodings
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 
+# Usage:
 # python run.py --train sample-data/train
-
 
 
 
@@ -58,45 +58,41 @@ def train_model(args):
                 print("Finished importing the saved model ...")
 
             train_writer = tf.summary.FileWriter(logs_path + '/train', session.graph)
-            global_start = time.time()
-            step_ii = 0
-
-            n_batches = int(len(samples) / Config.batch_size)
-            if n_batches < 1:
-                raise ValueError("Must have at least one batch of size %d to train model, but there are only %d datapoints available " % (Config.batch_size, len(samples)))
-                
+            
             for cur_epoch in range(Config.num_epochs):
-                print("epoch", cur_epoch)
                 batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, Config.batch_size)
+                print(len(batched_samples))
+                print(batched_samples[0].shape)
 
                 total_train_cost = total_train_wer = 0
                 start = time.time()
 
                 epoch_loss_avg = 0
                 epoch_wer_avg = 0
-                cur_batch_iter = 0
-                for cur_batch_iter in range(n_batches):
-                    #print(batched_transcripts[cur_batch_iter])
+                for cur_batch_iter in range(len(batched_samples)):
+                    # Do training step
+                    global_step = model.global_step.eval()
                     batch_cost, wer, summary = model.train_one_batch(session, 
                                                     batched_samples[cur_batch_iter], 
                                                     batched_transcripts[cur_batch_iter], 
                                                     batched_sample_lens[cur_batch_iter])
-                    train_writer.add_summary(summary, step_ii)
-                    step_ii += 1 
-                    epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
-                    epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
 
                     # Show information to user
-                    log = "Epoch {}/{}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
-                    print(log.format(cur_epoch+1, Config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
+                    log = "Epoch {}/{}, step {}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
+                    epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
+                    epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
+                    print(log.format(cur_epoch+1, Config.num_epochs, global_step, 
+                                     epoch_loss_avg, epoch_wer_avg, 
+                                    time.time() - start))
 
-                    global_step = model.global_step.eval()
-
-                    # Save checkpoints
+                    # Save checkpoints as per configuration
                     if global_step % Config.steps_per_checkpoint == 0:
-                        print("saving", global_step)
-                        model.saver.save(session, Config.checkpoint_dir, 
+                        # Checkpoints
+                        checkpoint_path = os.path.join(Config.checkpoint_dir, "checkpoint.ckpt")
+                        model.saver.save(session, checkpoint_path, 
                                                 global_step=model.global_step)
+                        # Tensorboard
+                        train_writer.add_summary(summary, global_step)
 
 
 def test_model(model, args):
