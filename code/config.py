@@ -12,6 +12,9 @@ class Config(object):
     ##########################
     # Data
     ##########################
+    train_path = "sample-data/train"
+    test_path = "sample-data/train" # "sample-data/test"
+    
     # What type of features to extract from the data
     # Valid feature_types: "wand_lda", "wand", "spectrogram"
     feature_type = "wand"
@@ -28,6 +31,7 @@ class Config(object):
     # TODO: reconfigure so the material that should be 
     # identified at runtime is in fact identified at runtime
     
+    
     ##########################
     # Model architecture
     ##########################
@@ -41,13 +45,14 @@ class Config(object):
     # Valid cell types: 'lstm', 'rnn', 'gru'
     cell_type = 'lstm' 
     
+    
     ##########################
     # Training options
     ##########################
-    num_epochs = 1 #50
+    num_epochs = 50
     batch_size = 2 #32
     learning_rate = 1e-3
-    l2_lambda = 1e-7
+    l2_lambda = 0 #1e-7
     
     # We clip by global norm, such that the 
     # maximum norm globally is scaled to this value

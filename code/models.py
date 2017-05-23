@@ -102,16 +102,21 @@ class SimpleEmgNN(object):
     def add_summary_op(self):
         self.merged_summary_op = tf.summary.merge_all()
 
-    def add_feed_dict(self, input_batch, target_batch, seq_batch):
-        feed_dict = {self.inputs_placeholder:input_batch, self.targets_placeholder:target_batch,
-                            self.seq_lens_placeholder:seq_batch}
+    def get_feed_dict(self, input_batch, target_batch, seq_batch):
+        feed_dict = {
+            self.inputs_placeholder: input_batch, 
+            self.targets_placeholder: target_batch,
+            self.seq_lens_placeholder: seq_batch
+        }
         return feed_dict
 
-    def train_one_batch(self, session, input_batch, target_batch, seq_batch,  train=True):
-        feed_dict = self.add_feed_dict(input_batch, target_batch, seq_batch)
+    def train_one_batch(self, session, input_batch, target_batch, seq_batch):
+        feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
         _, batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, 
                                             self.loss, self.wer, 
-                                            self.num_valid_examples, self.merged_summary_op], feed_dict)
+                                            self.num_valid_examples, 
+                                            self.merged_summary_op], 
+                                            feed_dict)
 
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
@@ -119,10 +124,12 @@ class SimpleEmgNN(object):
         return batch_cost, wer, summary
 
 
-    def test_one_batch(self, session):
+    def test_one_batch(self, session, input_batch, target_batch, seq_batch):
+        feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
         batch_cost, wer, batch_num_valid_ex, summary = session.run([self.loss, self.wer, 
-                                                    self.num_valid_examples, self.merged_summary_op], self.feed_dict)
-
+                                                    self.num_valid_examples, 
+                                                    self.merged_summary_op], 
+                                                    feed_dict)
         return batch_cost, wer, summary
 
     def get_config(self):

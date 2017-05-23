@@ -18,10 +18,10 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
     Returns
         batched_samples: a numpy ndarray of shape (n_batches, batch_size, n_features, max_timesteps).
             Samples of length < max_timesteps are padded with zeros.
-        batched_sample_lens: a numpy ndarray of shape (n_batches, batch_size) containing the
-            length of sample batches_samples[x,y] in number of timesteps
         batched_transcripts: a list of strings of shape (n_batches, batch_size) containing the
             transcript of sample batches_sample[x,y].
+        batched_sample_lens: a numpy ndarray of shape (n_batches, batch_size) containing the
+            length of sample batches_samples[x,y] in number of timesteps
     """
 
     p = np.random.permutation(len(samples))
@@ -39,7 +39,7 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
         batched_sample_lens.append(sample_lens[i*batch_size: (i+1)*batch_size])
         batched_transcripts.append(sparse_tuple_from(transcripts[i*batch_size: (i+1)*batch_size]))
 
-    return batched_samples, batched_sample_lens, batched_transcripts
+    return batched_samples, batched_transcripts, batched_sample_lens
 
 
 def sparse_tuple_from(sequences, dtype=np.int32):
@@ -63,7 +63,6 @@ def sparse_tuple_from(sequences, dtype=np.int32):
     return indices, values, shape
 
 def convert_to_encodings(target_data):
-
     char_set = set('A')
     for i in range(target_data.shape[0]):
         new_set = set(target_data[i])
@@ -71,7 +70,6 @@ def convert_to_encodings(target_data):
 
     char_list = list(char_set)
     encodings = range(len(char_list))
-
 
     encoded_targets = []
 
