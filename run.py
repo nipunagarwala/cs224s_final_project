@@ -35,7 +35,6 @@ def create_simple_model(num_features, num_encodings, cell_type):
     return model
 
 def train_model(args):
-    logs_path = "tensorboard/" + strftime("%Y_%m_%d_%H_%M_%S", gmtime())
     print("Extracting features")
     samples, sample_lens, transcripts = extract_all_features(os.getcwd()+ '/' + args.train_path, "wand")
     print("Finished reading files and extracting features ...")
@@ -57,12 +56,14 @@ def train_model(args):
                 new_saver.restore(session, args.load_from_file)
                 print("Finished importing the saved model ...")
 
-            train_writer = tf.summary.FileWriter(logs_path + '/train', session.graph)
+            # Create a tensorboard writer
+            logs_path = os.path.join(Config.tensorboard_dir, 
+                             strftime("%Y_%m_%d_%H_%M_%S", gmtime()), "train")
+            train_writer = tf.summary.FileWriter(logs_path, session.graph)
             
+            # Perform the training
             for cur_epoch in range(Config.num_epochs):
                 batched_samples, batched_sample_lens, batched_transcripts = make_batches(samples, sample_lens, transcripts, Config.batch_size)
-                print(len(batched_samples))
-                print(batched_samples[0].shape)
 
                 epoch_start = time.time()
                 epoch_loss_avg = 0
