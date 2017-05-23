@@ -64,9 +64,7 @@ def train_model(args):
                 print(len(batched_samples))
                 print(batched_samples[0].shape)
 
-                total_train_cost = total_train_wer = 0
-                start = time.time()
-
+                epoch_start = time.time()
                 epoch_loss_avg = 0
                 epoch_wer_avg = 0
                 for cur_batch_iter in range(len(batched_samples)):
@@ -83,7 +81,7 @@ def train_model(args):
                     epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
                     print(log.format(cur_epoch+1, Config.num_epochs, global_step, 
                                      epoch_loss_avg, epoch_wer_avg, 
-                                    time.time() - start))
+                                     time.time() - epoch_start))
 
                     # Save checkpoints as per configuration
                     if global_step % Config.steps_per_checkpoint == 0:
