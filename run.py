@@ -120,10 +120,7 @@ def train_model(args):
 
 
 def test_model(args):
-    # TODO: factor out the repeated code here
-    
-    # TODO: focus this on the test dataset, and 
-    # incorporate training-related status data on as part of  train_model
+    # TODO: factor out the repeated dataset creation code from train_model 
     feat_info = extract_all_features(Config.test_path, Config.feature_type)
     samples, sample_lens, transcripts = feat_info
     samples = np.transpose(samples, (0, 2, 1))
@@ -177,7 +174,7 @@ def parse_commandline():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
-    parser.add_argument('--restore', nargs='?', default=False, type=bool, help="Whether to restore from checkpoint directory specified in Config (default is false)")
+    parser.add_argument('--restore', nargs='?', default=False, type=bool, help="Whether to restore from checkpoint directory specified in Config (default is false; overriden to be True whenever phase is test)")
     args = parser.parse_args()
     return args
 
