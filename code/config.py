@@ -12,14 +12,21 @@ class Config(object):
     ##########################
     # Data
     ##########################
-    num_classes = 28 #Can change depending on the dataset
-    num_features = 100 #TO FIX!!!!
+    num_features = 525 
+    # Num classes is (vocabulary size + 1),
+    # with the 1 reflecting the BLANK character for CTC
+    num_classes = 26 
+    
+    # TODO: reconfigure so the material that should be 
+    # identified at runtime is in fact identified at runtime
     
     ##########################
     # Model architecture
     ##########################
     hidden_size = 256
     num_layers = 3
+    # Valid cell types: 'lstm', 'rnn', 'gru'
+    cell_type = 'lstm' 
     
     ##########################
     # Training options

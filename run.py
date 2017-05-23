@@ -29,9 +29,17 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 
 
-def create_simple_model(num_features, num_encodings, cell_type):
-    model = SimpleEmgNN(Config, num_features, num_encodings, cell_type)
-
+def create_model(session):
+    """
+    Returns model that has been initialized in `session`.
+    
+    Re-opens saved model if so instructed; otherwise creates 
+    a new model from scratch.
+    """
+    model = SimpleEmgNN(Config)
+   
+    # TODO: move restore from checkpoint etc. information into this function
+    
     return model
 
 def train_model(args):
@@ -45,14 +53,14 @@ def train_model(args):
 
     with tf.Graph().as_default():
         print("Creating model")
-        model = create_simple_model(samples.shape[2], num_encodings, 'lstm')
         print("Finished creating the model ...")
-        init = tf.global_variables_initializer()
         
         with tf.Session() as session:
-            session.run(init)
+            model = create_model(session)
+            session.run(tf.global_variables_initializer())
+            
             if args.load_from_file is not None:
-                new_saver = tf.train.import_meta_graph('%s.meta'%args.load_from_file, clear_devices=True)
+                new_saver = tf.train.import_meta_graph('%s.meta' % args.load_from_file, clear_devices=True)
                 new_saver.restore(session, args.load_from_file)
                 print("Finished importing the saved model ...")
 

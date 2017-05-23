@@ -8,25 +8,21 @@ class SimpleEmgNN(object):
     """
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
     """
-    def __init__(self, config, num_features=100, num_encodings=1, cell_type='lstm'):
+    def __init__(self, config):
         self.config = config
-        
-        self.config.num_features = num_features
-        self.config.num_classes = num_encodings+1
-        self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, num_features))
-        self.targets_placeholder = tf.sparse_placeholder(tf.int32)
-        self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
-        if cell_type == 'rnn':
+               
+        if self.config.cell_type == 'rnn':
             self.cell = tf.contrib.rnn.RNNCell
-        elif cell_type == 'gru':
+        elif self.config.cell_type == 'gru':
             self.cell = tf.contrib.rnn.GRUCell
-        elif cell_type == 'lstm':
+        elif self.config.cell_type == 'lstm':
             self.cell = tf.contrib.rnn.LSTMCell
         else:
             raise ValueError('Input correct cell type')
 
         self.global_step = tf.contrib.framework.get_or_create_global_step() 
       
+        self.add_placeholders()
         self.build_model()
         self.add_loss_op()
         self.add_optimizer_op()
@@ -36,14 +32,20 @@ class SimpleEmgNN(object):
         # Needs to be last line -- graph must be created before saver is created
         self.saver = tf.train.Saver(tf.global_variables(), 
                            keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
-
+                           
+    def add_placeholders(self):
+        self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, self.config.num_features))
+        self.targets_placeholder = tf.sparse_placeholder(tf.int32)
+        self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
+                           
     def build_model(self):
         W = tf.get_variable("Weights", shape=[self.config.hidden_size, self.config.num_classes],
                             initializer=tf.contrib.layers.xavier_initializer())
         b = tf.get_variable("Bias", shape=[self.config.num_classes])
 
-        rnnNet = tf.contrib.rnn.MultiRNNCell([self.cell(num_units = self.config.hidden_size) for _ in 
-                                            range(self.config.num_layers)], state_is_tuple=True)
+        rnnNet = tf.contrib.rnn.MultiRNNCell([self.cell(self.config.hidden_size) 
+                                              for _ in range(self.config.num_layers)], 
+                                              state_is_tuple=True)
         (rnnNet_out, rnnNet_state) = tf.nn.dynamic_rnn(cell = rnnNet, inputs=self.inputs_placeholder,
                         sequence_length=self.seq_lens_placeholder,dtype=tf.float32)
 
