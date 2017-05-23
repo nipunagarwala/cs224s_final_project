@@ -19,7 +19,7 @@ class Config(object):
         self.max_norm = 10
 
 
-class SimpleAcousticNN(object):
+class SimpleEmgNN(object):
     """
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
     """
@@ -39,6 +39,11 @@ class SimpleAcousticNN(object):
         else:
             raise ValueError('Input correct cell type')
 
+        self.build_model()
+        self.add_loss_op()
+        self.add_optimizer_op()
+        self.add_decoder_and_wer_op()
+        self.add_summary_op()
 
     def build_model(self):
         W = tf.get_variable("Weights", shape=[self.config.hidden_size, self.config.num_classes],
