@@ -25,21 +25,35 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 
 # Usage:
-# python run.py --train sample-data/train
+# Train a new model on the data/train directory:
+#   python run.py --train data/train
+# Restore and keep training a new model on the data/train directory:
+#   python run.py --train data/train --restore true
 
 
 
-def create_model(session):
+def create_model(session, restore):
     """
     Returns model that has been initialized in `session`.
     
     Re-opens saved model if so instructed; otherwise creates 
     a new model from scratch.
     """
+    print("Creating model")
     model = SimpleEmgNN(Config)
-   
-    # TODO: move restore from checkpoint etc. information into this function
     
+    ckpt = tf.train.get_checkpoint_state(Config.checkpoint_dir)
+    if restore and ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+        model.saver.restore(session, ckpt.model_checkpoint_path)
+        print("Model restored.")
+    else:
+        session.run(tf.global_variables_initializer())
+        try:
+            session.run(tf.assert_variables_initialized())
+        except tf.errors.FailedPreconditionError:
+            raise RuntimeError("Not all variables initialized!")
+        print("Created model with fresh parameters.")
+            
     return model
 
 def train_model(args):
@@ -52,18 +66,9 @@ def train_model(args):
     print("Finished converting targets into encodings ...")
 
     with tf.Graph().as_default():
-        print("Creating model")
-        print("Finished creating the model ...")
-        
         with tf.Session() as session:
-            model = create_model(session)
-            session.run(tf.global_variables_initializer())
+            model = create_model(session, args.restore)
             
-            if args.load_from_file is not None:
-                new_saver = tf.train.import_meta_graph('%s.meta' % args.load_from_file, clear_devices=True)
-                new_saver.restore(session, args.load_from_file)
-                print("Finished importing the saved model ...")
-
             # Create a tensorboard writer
             logs_path = os.path.join(Config.tensorboard_dir, 
                              strftime("%Y_%m_%d_%H_%M_%S", gmtime()), "train")
@@ -85,7 +90,7 @@ def train_model(args):
                                                     batched_sample_lens[cur_batch_iter])
 
                     # Show information to user
-                    log = "Epoch {}/{}, step {}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
+                    log = "Epoch {}/{}, overall step {}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
                     epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
                     epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
                     print(log.format(cur_epoch+1, Config.num_epochs, global_step, 
@@ -152,7 +157,7 @@ def parse_commandline():
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
     parser.add_argument('--train_path', nargs='?', default='sample-data/train', type=str, help="Give path to training data")
     parser.add_argument('--val_path', nargs='?', default='sample-data/test', type=str, help="Give path to val data")
-    parser.add_argument('--load_from_file', nargs='?', default=None, type=str, help="Provide filename to load saved model")
+    parser.add_argument('--restore', nargs='?', default=False, type=bool, help="Whether to restore from checkpoint directory specified in Config (default is false)")
     args = parser.parse_args()
     return args
 

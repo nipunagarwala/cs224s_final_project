@@ -33,7 +33,7 @@ class Config(object):
     ##########################
     num_epochs = 1 #50
     batch_size = 2 #32
-    lr = 1e-3
+    learning_rate = 1e-3
     l2_lambda = 1e-7
     
     # We clip by global norm, such that the 
