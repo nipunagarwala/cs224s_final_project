@@ -9,17 +9,23 @@ import math
 import random
 import tensorflow as tf
 import time
+import argparse
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 from code.models import *
 from time import gmtime, strftime
 
-from code.utils.utils import parse_commandline
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches
 from code.utils.utils import convert_to_encodings
 
 BATCH_SIZE = 32
+
+
+# python run.py --train sample-data/train
+# 
+
+
 
 def create_simple_model(num_features, num_encodings, cell_type):
     model = SimpleAcousticNN(num_features,num_encodings, cell_type)
@@ -121,6 +127,29 @@ def test_model(model, args):
                 print(log.format(curr_epoch+1, model_config.num_epochs, epoch_loss_avg, epoch_wer_avg, time.time() - start))
 
 
+def parse_commandline():
+    """
+    Parses the command line arguments to the run method for training and testing purposes
+    Inputs:
+        None
+    Returns:
+        args: An object with the command line arguments stored in the correct values.
+            phase : Train or Test
+            train_path : Path for the training data
+            val_path : Path for the testing data
+            save_every : (Int) How often to save the model
+            save_to_file : (string) Path to file to save the model too
+            load_from_file : (string) Path to load the model from
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--phase', default='train', choices=['train', 'test'])
+    parser.add_argument('--train_path', nargs='?', default='sample-data/train', type=str, help="Give path to training data")
+    parser.add_argument('--val_path', nargs='?', default='sample-data/test', type=str, help="Give path to val data")
+    parser.add_argument('--save_every', nargs='?', default=2, type=int, help="Save model every x iterations. Default is not saving at all.")
+    parser.add_argument('--save_to_file', nargs='?', default=os.getcwd()+ '/' + 'checkpoints/model_ckpt', type=str, help="Provide filename prefix for saving intermediate models")
+    parser.add_argument('--load_from_file', nargs='?', default=None, type=str, help="Provide filename to load saved model")
+    args = parser.parse_args()
+    return args
 
   
 def main(args):
