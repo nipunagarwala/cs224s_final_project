@@ -1,15 +1,21 @@
-import numpy as np 
 import sys
 import os
-import tensorflow as tf
 import math
+
+import numpy as np 
+import tensorflow as tf
+
+from code.utils.preprocess import get_num_features
 
 class SimpleEmgNN(object):
     """
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
     """
-    def __init__(self, config):
+    def __init__(self, config, alphabet_size):
         self.config = config
+        
+        self.num_features = get_num_features(self.config.feature_type)
+        self.alphabet_size = alphabet_size
                
         if self.config.cell_type == 'rnn':
             self.cell = tf.contrib.rnn.RNNCell
@@ -34,27 +40,29 @@ class SimpleEmgNN(object):
                            keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
                            
     def add_placeholders(self):
-        self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, self.config.num_features))
+        # TODO FIXME clean up
+        # Inputs are batch size, by max sequence length, by num features.
+        # Inputs are (batch_size,  max_timesteps, n_features)
+        self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, self.num_features))
+        # Targets are 1-D
         self.targets_placeholder = tf.sparse_placeholder(tf.int32)
+        # Sequence lengths are batch size-by-
         self.seq_lens_placeholder = tf.placeholder(tf.int32, shape=(None))
                            
     def build_model(self):
-        W = tf.get_variable("Weights", shape=[self.config.hidden_size, self.config.num_classes],
-                            initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable("Bias", shape=[self.config.num_classes])
-
         rnnNet = tf.contrib.rnn.MultiRNNCell([self.cell(self.config.hidden_size) 
-                                              for _ in range(self.config.num_layers)], 
-                                              state_is_tuple=True)
-        (rnnNet_out, rnnNet_state) = tf.nn.dynamic_rnn(cell = rnnNet, inputs=self.inputs_placeholder,
-                        sequence_length=self.seq_lens_placeholder,dtype=tf.float32)
+                                              for _ in range(self.config.num_layers)])
+        output, _ = tf.nn.dynamic_rnn(rnnNet, self.inputs_placeholder,
+                        sequence_length=self.seq_lens_placeholder,
+                        dtype=tf.float32)
 
-        cur_shape = tf.shape(rnnNet_out)
-        rnnOut_2d = tf.reshape(rnnNet_out, [-1, cur_shape[2]])
-
-        logits_2d = tf.matmul(rnnOut_2d, W) + b
-        logits = tf.reshape(logits_2d,[cur_shape[0], cur_shape[1], self.config.num_classes])
-
+        logits = tf.contrib.layers.fully_connected(output, 
+                    num_outputs=self.alphabet_size,
+					activation_fn=None, 
+                    weights_initializer=tf.contrib.layers.xavier_initializer(),
+					biases_initializer=tf.constant_initializer(0.0), 
+                    trainable=True)
+        
         self.logits = logits
 
 

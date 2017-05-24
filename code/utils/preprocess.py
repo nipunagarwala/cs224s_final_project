@@ -1,13 +1,17 @@
 """
-@author Pol Rosello
+@author Pol Rosello, Pamela Toman
 """
 
 import pickle
 import glob
 import os
-import numpy as np
 import scipy.signal
+
+import numpy as np
+
+from itertools import chain
 from collections import Counter
+from sklearn import preprocessing
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 EMG_F_SAMPLE = 600.0
@@ -280,24 +284,26 @@ def extract_features(pkl_filename, feature_type):
 def extract_all_features(directory, feature_type, session_type=None):
     """
     Extracts features from all files in a given directory according to the 
+    `feature_type` and `session_type` requested
 
     Inputs:
         directory: a directory containing utteranceInfo.pkl and the pkl files
             for all utterances specified in utteranceInfo.pkl.
         feature_type: either "wand", "wand_lda", or "spectrogram".
-        session_type: "audible", "whispered", or "silent". if None, extracts
-            features for all sessions.
+        session_type: None, "audible", "whispered", or "silent". if None, 
+            extracts features for all sessions.
 
     Returns:
-        padded_samples: a numpy ndarray of shape (n_samples, n_features, max_timesteps).
+        padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
             Samples of length < max_timesteps are padded with zeros.
         sample_lens: a numpy ndarray of shape (n_samples,) containing the
             length of sample padded_samples[i] in number of timesteps.
         transcripts: a list of strings of shape (n_samples,) containing the
             transcript of sample padded_samples[i].
+        label_encoder: a sklearn.preprocessing.LabelEncoder for the transcripts
     """
     samples = []
-    transcripts = []
+    original_transcripts = []
     phone_labels = []
 
     meta_info_path = os.path.join(directory, "utteranceInfo.pkl")
@@ -312,14 +318,21 @@ def extract_all_features(directory, feature_type, session_type=None):
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
         features, phones = extract_features(pkl_filename, feature_type)
-        transcript = utterance["transcript"]
         samples.append(features)
-        transcripts.append(transcript)
+        original_transcripts.append(utterance["transcript"])
         phone_labels.append(phones)
 
     if feature_type == "wand_lda":
         samples = wand_lda(samples, phone_labels)
 
+    # Build the encodings
+    le = preprocessing.LabelEncoder()
+    le.fit(list(chain.from_iterable([list(x) for x in original_transcripts])))
+    transcripts = []
+    for text in original_transcripts:
+        transcripts.append(le.transform(list(text)))
+        
+    # Get lengths
     sample_lens = np.array([s.shape[1] for s in samples], dtype=np.int64)
 
     n_samples = len(samples)
@@ -332,7 +345,21 @@ def extract_all_features(directory, feature_type, session_type=None):
     for i, sample in enumerate(samples):
         padded_samples[i,:,0:sample_lens[i]] = sample
 
-    return padded_samples, sample_lens, np.array(transcripts)
+    # Ensure samples are shaped (n_samples, max_timesteps, n_features)
+    padded_samples = np.transpose(padded_samples, (0, 2, 1))
+    return padded_samples, sample_lens, np.array(transcripts), le
+   
+def get_num_features(feature_type):
+    """
+    Returns the number of features associated with a type.
+    
+    Inputs
+        feature_type: either "wand", "wand_lda", or "spectrogram".
+    """
+    if feature_type == "wand":
+        return 525 
+    else:
+        raise ValueError("No number of features associated with %s" % feature_type)
 
 if __name__ == "__main__":
     """

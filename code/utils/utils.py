@@ -37,6 +37,7 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
     for i in range(n_batches):
         batched_samples.append(samples[i*batch_size: (i+1)*batch_size])
         batched_sample_lens.append(sample_lens[i*batch_size: (i+1)*batch_size])
+        # Transcripts must be sparse because of tensorflow CTC requirements
         batched_transcripts.append(sparse_tuple_from(transcripts[i*batch_size: (i+1)*batch_size]))
 
     return batched_samples, batched_transcripts, batched_sample_lens
@@ -61,26 +62,3 @@ def sparse_tuple_from(sequences, dtype=np.int32):
     shape = np.asarray([len(sequences), np.asarray(indices).max(0)[1]+1], dtype=np.int64)
 
     return indices, values, shape
-
-def convert_to_encodings(target_data):
-    char_set = set('A')
-    for i in range(target_data.shape[0]):
-        new_set = set(target_data[i])
-        char_set |= new_set
-
-    char_list = list(char_set)
-    encodings = range(len(char_list))
-
-    encoded_targets = []
-
-    for t in range(target_data.shape[0]):
-        cur_target = list(target_data[t])
-        for i in range(len(char_list)):
-            for s in range(len(cur_target)):
-                if cur_target[s] == char_list[i]:
-                    cur_target[s] = encodings[i]
-
-        encoded_targets.append(list(cur_target))
-
-    return encoded_targets, len(encodings)
-

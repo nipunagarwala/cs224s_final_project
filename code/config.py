@@ -18,20 +18,7 @@ class Config(object):
     # What type of features to extract from the data
     # Valid feature_types: "wand_lda", "wand", "spectrogram"
     feature_type = "wand"
-    
-    # Number of features 
-    # TODO this depends on type of feature selected;
-    # shouldn't be hardcoded
-    num_features = 525 
-    
-    # Num classes is (vocabulary size + 1),
-    # with the 1 reflecting the BLANK character for CTC
-    num_classes = 26 
-    
-    # TODO: reconfigure so the material that should be 
-    # identified at runtime is in fact identified at runtime
-    
-    
+       
     ##########################
     # Model architecture
     ##########################
@@ -57,4 +44,3 @@ class Config(object):
     # We clip by global norm, such that the 
     # maximum norm globally is scaled to this value
     max_norm = 10 
-

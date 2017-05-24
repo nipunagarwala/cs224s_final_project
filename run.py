@@ -8,6 +8,7 @@ import math
 import random
 import time
 import argparse
+import pickle
 
 import numpy as np 
 import tensorflow as tf
@@ -17,7 +18,6 @@ from code.config import Config
 from code.models import SimpleEmgNN
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches
-from code.utils.utils import convert_to_encodings
 
 
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -38,14 +38,14 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 # See config.py for additional configuration parameters.
 
 
-def create_model(session, restore):
+def create_model(session, restore, alphabet_size):
     """
     Returns a model, which has been initialized in `session`.
     Re-opens saved model if so instructed; otherwise creates 
     a new model from scratch.
     """
     print("Creating model")
-    model = SimpleEmgNN(Config)
+    model = SimpleEmgNN(Config, alphabet_size)
     
     ckpt = tf.train.get_checkpoint_state(Config.checkpoint_dir)
     if restore:
@@ -53,7 +53,7 @@ def create_model(session, restore):
             model.saver.restore(session, ckpt.model_checkpoint_path)
             print("Model restored.")
         else:
-            raise RuntimeError("Cannot restore from nonexistent checkpoint at %s" % ckpt.model_checkpoint_path)
+            raise RuntimeError("Cannot restore from nonexistent checkpoint at %s" % ckpt.model_checkpoint_path)        
     else:
         session.run(tf.global_variables_initializer())
         try:
@@ -64,20 +64,11 @@ def create_model(session, restore):
             
     return model
 
-def train_model(args):
-    print("Extracting features")
-    feat_info = extract_all_features(Config.train_path, Config.feature_type)
-    samples, sample_lens, transcripts = feat_info
-    print("Finished reading files and extracting features ...")
-
-    samples = np.transpose(samples, (0, 2, 1))
-    transcripts, _ = convert_to_encodings(transcripts)
-    print("Finished converting targets into encodings ...")
-
+def train_model(args, samples, sample_lens, transcripts, label_encoder):  
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
-            model = create_model(session, args.restore)
+            model = create_model(session, args.restore, len(label_encoder.classes_)+1)
             
             # Create a tensorboard writer for this session
             logs_path = os.path.join(Config.tensorboard_dir, 
@@ -97,6 +88,7 @@ def train_model(args):
                                                     batched_samples[cur_batch_iter], 
                                                     batched_transcripts[cur_batch_iter], 
                                                     batched_sample_lens[cur_batch_iter])
+
                     global_step = model.global_step.eval()
 
                     # Show information to user
@@ -108,7 +100,23 @@ def train_model(args):
                                      global_step, 
                                      epoch_loss_avg, epoch_wer_avg, 
                                      time.time() - epoch_start))
-
+                    # Watch performance
+                    example_to_print = 0
+                    print("\nSample from batch")
+                    print("  Input shape (max_timesteps, n_features): ", end="")
+                    print(batched_samples[cur_batch_iter][example_to_print].shape)
+                    print("  Input active timesteps: ", end="")
+                    print(batched_sample_lens[cur_batch_iter][example_to_print])
+                    print("  Target: ", end="")
+                    # batched_transcripts are sparse vectors, as per utils.sparse_tuple_from
+                    tr_indices, tr_values, tr_shape = batched_transcripts[cur_batch_iter]
+                    for (example, timestep), val in zip(tr_indices, tr_values):
+                        if example == example_to_print:
+                            print(label_encoder.inverse_transform(val), end="" )
+                    print("\n")
+                    # TODO: print out the model's estimate on example_to_print 
+                    # TODO: moving the above watching performance material into a function
+                                     
                     # Save checkpoints as per configuration
                     if global_step % Config.steps_per_checkpoint == 0:
                         # Checkpoints
@@ -119,17 +127,11 @@ def train_model(args):
                         train_writer.add_summary(summary, global_step)
 
 
-def test_model(args):
-    # TODO: factor out the repeated dataset creation code from train_model 
-    feat_info = extract_all_features(Config.test_path, Config.feature_type)
-    samples, sample_lens, transcripts = feat_info
-    samples = np.transpose(samples, (0, 2, 1))
-    transcripts, _ = convert_to_encodings(transcripts)
-    
+def test_model(args, samples, sample_lens, transcripts, label_encoder):
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
-            model = create_model(session, True) # always restore
+            model = create_model(session, args.restore) # always restore
 
             # Create a tensorboard writer for this session
             logs_path = os.path.join(Config.tensorboard_dir, 
@@ -178,14 +180,50 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
+def prep_data(args, path_to_data):
+    print("Extracting features")
+    # Extract features
+    feat_info = extract_all_features(path_to_data, Config.feature_type)
+    samples, sample_lens, transcripts, label_encoder = feat_info
+    
+    # Restore labels from disk instead if restoring
+    label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
+    if args.restore:
+        if label_fn and os.path.isfile(label_fn):
+            with open(label_fn, "rb") as f:
+                label_encoder = pickle.load(f)
+        else:
+            raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
+        print("Labels restored")
+    else:
+        with open(label_fn, "wb") as f:
+            pickle.dump(label_encoder, f)
+        print("Labels stored")
+    
+    # Verify to user load succeeded
+    print("Features successfully extracted. Verification:")
+    print("------")
+    print("Input 0 shape (max_timesteps, n_features):")
+    print(samples[0].shape)
+    print("Input 0 active timesteps")
+    print(sample_lens[0])
+    print("Target 0")
+    print(transcripts[0])
+    print(label_encoder.inverse_transform(transcripts[0]))
+    
+    return samples, sample_lens, transcripts, label_encoder
   
 def main(args):
     # TODO: add the ability to run a test on the training data
     # to check for overfitting
+    
     if args.phase == 'train':
-        train_model(args)
+        data, lens, transcripts, le = prep_data(args, Config.train_path)
+        train_model(args, data, lens, transcripts, le)
     if args.phase == 'test':
-        test_model(args)
+        args.restore = True
+        data, lens, transcripts, le = prep_data(args, Config.test_path)
+        test_model(args, data, lens, transcripts, le)
 
 
 if __name__ == '__main__':
