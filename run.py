@@ -81,12 +81,12 @@ def print_details_on_example(example_to_print,
         label_encoder: sklearn.preprocessing.LabelEncoder instance
     """
     # TODO: include information about the mode of the sample (silent/audible/etc.)
-    print("\nSample from batch")
+    print("\nSample %d from batch:" % example_to_print)
     print("  Input shape (max_timesteps, n_features): ", end="")
     print(samples[example_to_print].shape)
     print("  Input active timesteps: ", end="")
     print(lens[example_to_print])
-    print("  Target:   ", end="")
+    print("  Target:  ", end="")
     print_example(transcripts, example_to_print, label_encoder)
     print("  Decoded (beam): ")
     for path_id, beam_result in enumerate(beam_decoded):
