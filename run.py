@@ -103,14 +103,14 @@ def print_details_on_example(example_to_print,
     
     print()
     
-def create_model(session, restore, alphabet_size):
+def create_model(session, restore, num_features, alphabet_size):
     """
     Returns a model, which has been initialized in `session`.
     Re-opens saved model if so instructed; otherwise creates 
     a new model from scratch.
     """
     print("Creating model")
-    model = SimpleEmgNN(Config, alphabet_size)
+    model = SimpleEmgNN(Config, num_features, alphabet_size)
     
     ckpt = tf.train.get_checkpoint_state(Config.checkpoint_dir)
     if restore:
@@ -133,7 +133,8 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
-            model = create_model(session, args.restore, len(label_encoder.classes_)+1)
+            model = create_model(session, args.restore, 
+                        samples.shape[-1], len(label_encoder.classes_)+1)
             
             # Create a tensorboard writer for this session
             logs_path = os.path.join(Config.tensorboard_dir, 
@@ -188,7 +189,8 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
-            model = create_model(session, args.restore, len(label_encoder.classes_)+1)
+            model = create_model(session, args.restore, 
+                        samples.shape[-1], len(label_encoder.classes_)+1)
 
             # Create a tensorboard writer for this session
             logs_path = os.path.join(Config.tensorboard_dir, 
@@ -282,8 +284,8 @@ def prep_data(args, path_to_data):
   
 def main(args):
     # TODO: add the ability to run a test on the training data
-    # to check for overfitting
-    
+    # to check for overfitting -- aka add a validation set
+    # and the setup for it
     if args.phase == 'train':
         data, lens, transcripts, le = prep_data(args, Config.train_path)
         train_model(args, data, lens, transcripts, le)
@@ -291,7 +293,8 @@ def main(args):
         args.restore = True
         data, lens, transcripts, le = prep_data(args, Config.test_path)
         test_model(args, data, lens, transcripts, le)
-
+    else:
+        raise RuntimeError("Phase '%s' is unknown" % args.phase)
 
 if __name__ == '__main__':
     args = parse_commandline()

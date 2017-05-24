@@ -348,18 +348,6 @@ def extract_all_features(directory, feature_type, session_type=None):
     # Ensure samples are shaped (n_samples, max_timesteps, n_features)
     padded_samples = np.transpose(padded_samples, (0, 2, 1))
     return padded_samples, sample_lens, np.array(transcripts), le
-   
-def get_num_features(feature_type):
-    """
-    Returns the number of features associated with a type.
-    
-    Inputs
-        feature_type: either "wand", "wand_lda", or "spectrogram".
-    """
-    if feature_type == "wand":
-        return 525 
-    else:
-        raise ValueError("No number of features associated with %s" % feature_type)
 
 if __name__ == "__main__":
     """

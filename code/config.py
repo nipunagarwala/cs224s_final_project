@@ -17,7 +17,7 @@ class Config(object):
     
     # What type of features to extract from the data
     # Valid feature_types: "wand_lda", "wand", "spectrogram"
-    feature_type = "wand"
+    feature_type = "wand_lda"
        
     ##########################
     # Model architecture

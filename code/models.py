@@ -5,16 +5,14 @@ import math
 import numpy as np 
 import tensorflow as tf
 
-from code.utils.preprocess import get_num_features
-
 class SimpleEmgNN(object):
     """
     Implements a recurrent neural network with multiple hidden layers and CTC loss.
     """
-    def __init__(self, config, alphabet_size):
+    def __init__(self, config, num_features, alphabet_size):
         self.config = config
         
-        self.num_features = get_num_features(self.config.feature_type)
+        self.num_features = num_features
         self.alphabet_size = alphabet_size
                
         if self.config.cell_type == 'rnn':
@@ -37,6 +35,7 @@ class SimpleEmgNN(object):
         
         # Needs to be last line -- graph must be created before saver is created
         self.saver = tf.train.Saver(tf.global_variables(), 
+                           max_to_keep=5,
                            keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
                            
     def add_placeholders(self):
