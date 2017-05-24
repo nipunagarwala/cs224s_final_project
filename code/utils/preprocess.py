@@ -321,7 +321,11 @@ def extract_all_features(directory, feature_type, session_type=None):
         samples.append(features)
         original_transcripts.append(utterance["transcript"])
         phone_labels.append(phones)
-
+        
+    if len(samples) == 0:
+        raise ValueError("Dataset %s has no entries when filtered for '%s' " % 
+                         (meta_info_path, session_type if session_type is not None else "(none)"))
+        
     if feature_type == "wand_lda":
         samples = wand_lda(samples, phone_labels)
 

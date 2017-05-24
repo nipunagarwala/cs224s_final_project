@@ -218,6 +218,7 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                 # Watch performance
                 num_examples_in_batch = beam_probs.shape[0]
                 for example_id in range(num_examples_in_batch):
+                    # TODO dump the test results to a file rather than to screen
                     print_details_on_example(example_id, batched_samples[cur_batch_iter],
                                                         batched_sample_lens[cur_batch_iter],
                                                         batched_transcripts[cur_batch_iter],
@@ -249,13 +250,13 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data):
+def prep_data(args, path_to_data, feature_type, mode):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, Config.feature_type)
+    feat_info = extract_all_features(path_to_data, feature_type, mode)
     samples, sample_lens, transcripts, label_encoder = feat_info
     
-    # Restore labels from disk instead if restoring
+    # Restore labels from disk instead of restoring
     label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
     if args.restore:
         if label_fn and os.path.isfile(label_fn):
@@ -270,8 +271,8 @@ def prep_data(args, path_to_data):
         print("Labels stored")
     
     # Verify to user load succeeded
-    print("Features successfully extracted. Verification:")
     print("------")
+    print("Features successfully extracted. Verification:")
     print("Input 0 shape (max_timesteps, n_features):")
     print(samples[0].shape)
     print("Input 0 active timesteps")
@@ -287,12 +288,16 @@ def main(args):
     # to check for overfitting -- aka add a validation set
     # and the setup for it
     if args.phase == 'train':
-        data, lens, transcripts, le = prep_data(args, Config.train_path)
+        data, lens, transcripts, le = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode)
         train_model(args, data, lens, transcripts, le)
+        
     elif args.phase == 'test':
         args.restore = True
-        data, lens, transcripts, le = prep_data(args, Config.test_path)
+        data, lens, transcripts, le = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode)
         test_model(args, data, lens, transcripts, le)
+        
     else:
         raise RuntimeError("Phase '%s' is unknown" % args.phase)
 
