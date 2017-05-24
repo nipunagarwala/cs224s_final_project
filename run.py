@@ -287,7 +287,7 @@ def main(args):
     if args.phase == 'train':
         data, lens, transcripts, le = prep_data(args, Config.train_path)
         train_model(args, data, lens, transcripts, le)
-    if args.phase == 'test':
+    elif args.phase == 'test':
         args.restore = True
         data, lens, transcripts, le = prep_data(args, Config.test_path)
         test_model(args, data, lens, transcripts, le)

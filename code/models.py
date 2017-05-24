@@ -40,10 +40,9 @@ class SimpleEmgNN(object):
                            keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
                            
     def add_placeholders(self):
-        # TODO FIXME clean up
-        # Inputs are batch size, by max sequence length, by num features.
-        # Inputs are (batch_size,  max_timesteps, n_features)
-        self.inputs_placeholder = tf.placeholder(tf.float32, shape=(None, None, self.num_features))
+        # Inputs are batch size, by max seq len/timesteps, by num features
+        self.inputs_placeholder = tf.placeholder(tf.float32, 
+                                    shape=(None, None, self.num_features))
         # Targets are 1-D
         self.targets_placeholder = tf.sparse_placeholder(tf.int32)
         # Sequence lengths are batch size-by-
