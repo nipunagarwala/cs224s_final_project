@@ -299,6 +299,8 @@ def main(args):
     # TODO: add the ability to run a test on the training data
     # to check for overfitting -- aka add a validation set
     # and the setup for it
+    if os.path.isfile(os.path.join(Config.checkpoint_dir, "config.py")):
+        raise RuntimeError("There is already a configuration file in directory '%s' -- please restore it by hand to code/config.py or delete it" % Config.checkpoint_dir)
     shutil.copy("code/config.py", Config.checkpoint_dir)
     
     if args.phase == 'train':

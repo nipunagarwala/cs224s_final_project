@@ -4,7 +4,7 @@ class Config(object):
     ##########################
     # Checkpointing configuration
     ##########################
-    checkpoint_dir = "checkpoints_wand_memorize"
+    checkpoint_dir = "checkpoints"
     tensorboard_dir = "tensorboard"
     steps_per_checkpoint = 25
     freq_of_longterm_checkpoint = 0.5     # in hours
@@ -21,7 +21,7 @@ class Config(object):
     
     # What type of features to extract from the data
     # Valid feature_types: "wand_lda", "wand", "spectrogram"
-    feature_type = "wand"
+    feature_type = "spectrogram"
        
     ##########################
     # Model architecture
@@ -44,7 +44,7 @@ class Config(object):
     num_epochs = 1000
     # Number of examples in each batch (should be as 
     # large as successfully fits in memory)
-    batch_size = 2
+    batch_size = 5
     
     # Initial step size for Adam optimizer
     learning_rate = 1e-3
