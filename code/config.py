@@ -36,9 +36,15 @@ class Config(object):
     ##########################
     # Training options
     ##########################
+    # Number of passes to make over entire dataset
     num_epochs = 50
+    # Number of examples in each batch (should be as 
+    # large as successfully fits in memory)
     batch_size = 2 #32
+    
+    # Initial step size for Adam optimizer
     learning_rate = 1e-3
+    # Weight on regularization cost
     l2_lambda = 1e-7
     
     # We clip by global norm, such that the 
