@@ -56,7 +56,8 @@ def print_example(sparse_matrix, example_to_print, label_encoder):
 def print_details_on_example(example_to_print, 
                              samples, lens, transcripts, 
                              beam_decoded, beam_probs,
-                             label_encoder):
+                             label_encoder,
+                             limit_beam_to=None):
     """
     Prints details of `example_to_print`: its input shape, 
     active timesteps, target text, and the beam results and their
@@ -79,19 +80,27 @@ def print_details_on_example(example_to_print,
         beam_decoded: first output of tf.nn.ctc_beam_search_decoder
         beam_probs: second output of tf.nn.ctc_beam_search_decoder
         label_encoder: sklearn.preprocessing.LabelEncoder instance
+        limit_beam_to: integer or None; None prints entire beam
     """
     # TODO: include information about the mode of the sample (silent/audible/etc.)
     print("\nSample %d from batch:" % example_to_print)
+    
     print("  Input shape (max_timesteps, n_features): ", end="")
     print(samples[example_to_print].shape)
+    
     print("  Input active timesteps: ", end="")
     print(lens[example_to_print])
+    
     print("  Target:  ", end="")
     print_example(transcripts, example_to_print, label_encoder)
-    print("  Decoded (beam): ")
+    
+    print("  Decoded (top %s): " % ("all" if limit_beam_to is None else str(limit_beam_to)))
     for path_id, beam_result in enumerate(beam_decoded):
+        if limit_beam_to and path_id >= limit_beam_to:
+            break
         print("    (%4.1f) " % beam_probs[example_to_print][path_id], end="")
         print_example(beam_result, example_to_print, label_encoder)
+    
     print()
     
 def create_model(session, restore, alphabet_size):
@@ -179,7 +188,7 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
-            model = create_model(session, args.restore) # always restore
+            model = create_model(session, args.restore, len(label_encoder.classes_)+1)
 
             # Create a tensorboard writer for this session
             logs_path = os.path.join(Config.tensorboard_dir, 
@@ -204,13 +213,22 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                 # Show information to user
                 test_loss_avg += (batch_cost - test_loss_avg)/(cur_batch_iter+1)
                 test_wer_avg += (wer - test_wer_avg)/(cur_batch_iter+1)
-                log = "Batch {}; So far: test_cost = {:.3f}, test_wer = {:.3f}, time = {:.3f}"
-                print(log.format(cur_batch_iter,
-                                 test_loss_avg, test_wer_avg, 
-                                 time.time() - test_start))
-                
+                # Watch performance
+                num_examples_in_batch = beam_probs.shape[0]
+                for example_id in range(num_examples_in_batch):
+                    print_details_on_example(example_id, batched_samples[cur_batch_iter],
+                                                        batched_sample_lens[cur_batch_iter],
+                                                        batched_transcripts[cur_batch_iter],
+                                                        beam_decoded,
+                                                        beam_probs,
+                                                        label_encoder,
+                                                        limit_beam_to=1)
                 # Write to Tensorboard
                 test_writer.add_summary(summary, global_step)
+                
+            log = "Test_cost = {:.3f}, test_wer = {:.3f}, time = {:.3f}"
+            print(log.format(test_loss_avg, test_wer_avg, 
+                             time.time() - test_start))
 
 
 def parse_commandline():
