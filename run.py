@@ -65,6 +65,7 @@ def print_details_on_example(example_to_print,
                              samples, lens, transcripts, 
                              beam_decoded, beam_probs,
                              label_encoder,
+                             show_autocorrect=False,
                              limit_beam_to=None):
     """
     Prints details of `example_to_print`: its input shape, 
@@ -88,6 +89,9 @@ def print_details_on_example(example_to_print,
         beam_decoded: first output of tf.nn.ctc_beam_search_decoder
         beam_probs: second output of tf.nn.ctc_beam_search_decoder
         label_encoder: sklearn.preprocessing.LabelEncoder instance
+        show_autocorrect: boolean for whether to perform autocorrection;
+            when True, performance can be very slow because it requires
+            searching a dictionary for similar words
         limit_beam_to: integer or None; None prints entire beam
     """
     # TODO: include information about the mode of the sample (silent/audible/etc.)
@@ -107,11 +111,10 @@ def print_details_on_example(example_to_print,
             break
         ex_prob = beam_probs[example_to_print][path_id]
         ex_str = generate_str_example(beam_result, example_to_print, label_encoder)
-        ex_str_corr = " ".join([autocorrect.spell(word) for word in ex_str.split()])
         print("    (%4.1f) %s" % (ex_prob, ex_str))
-        print("           %s" % (ex_str_corr))
-    
-    print()
+        if show_autocorrect:
+            ex_str_corr = " ".join([autocorrect.spell(word) for word in ex_str.split()])
+            print("           %s" % (ex_str_corr))
     
 def create_model(session, restore, num_features, alphabet_size):
     """
