@@ -42,7 +42,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 # A copy of config.py as well as labels.pkl is included in 
 # the Config.checkpoint_dir for posterity 
 
-def print_example(sparse_matrix, example_to_print, label_encoder):
+def generate_str_example(sparse_matrix, example_to_print, label_encoder):
     """
     Given a sparse matrix in Tensorflow's format, and 
     an integer indicating the example_to_print aka row,
@@ -96,18 +96,17 @@ def print_details_on_example(example_to_print,
     print("  Input shape (max_timesteps, n_features): ", end="")
     print(samples[example_to_print].shape)
     
-    print("  Input active timesteps: ", end="")
-    print(lens[example_to_print])
+    print("  Input active timesteps: %d" % lens[example_to_print])
     
-    print("  Target:  ", end="")
-    print_example(transcripts, example_to_print, label_encoder)
+    ex_truth = generate_str_example(transcripts, example_to_print, label_encoder)
+    print("  Target:  %s" % ex_truth)
     
-    print("  Decoded (top %s): " % ("all" if limit_beam_to is None else str(limit_beam_to)))
+    print("  Decoded (top %s, with autocorrect): " % ("all" if limit_beam_to is None else str(limit_beam_to)))
     for path_id, beam_result in enumerate(beam_decoded):
         if limit_beam_to and path_id >= limit_beam_to:
             break
         ex_prob = beam_probs[example_to_print][path_id]
-        ex_str = print_example(beam_result, example_to_print, label_encoder)
+        ex_str = generate_str_example(beam_result, example_to_print, label_encoder)
         ex_str_corr = " ".join([autocorrect.spell(word) for word in ex_str.split()])
         print("    (%4.1f) %s" % (ex_prob, ex_str))
         print("           %s" % (ex_str_corr))
