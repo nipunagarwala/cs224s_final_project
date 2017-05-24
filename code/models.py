@@ -35,7 +35,6 @@ class SimpleEmgNN(object):
         
         # Needs to be last line -- graph must be created before saver is created
         self.saver = tf.train.Saver(tf.global_variables(), 
-                           max_to_keep=5,
                            keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
                            
     def add_placeholders(self):
@@ -100,6 +99,11 @@ class SimpleEmgNN(object):
                                     top_paths=self.config.beam_size,
                                     merge_repeated=False)
         decoded_sequence = tf.cast(self.all_decoded_sequences[0], tf.int32)
+        
+        # TODO: add autocorrection before wer, to retrieve both WER before and after autocorrect
+        # (this is non-trivial while we have the decoded_sequence data format --
+        # should be easier if we move to a WER approach that is like the one we had
+        # discussed)
         self.wer = tf.reduce_mean(tf.edit_distance(decoded_sequence,
                                               self.targets_placeholder,
                                               normalize=True))

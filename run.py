@@ -9,6 +9,8 @@ import random
 import time
 import argparse
 import pickle
+import shutil
+import autocorrect
 
 import numpy as np 
 import tensorflow as tf
@@ -37,21 +39,27 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 #
 # See config.py for additional configuration parameters.
 
+# A copy of config.py as well as labels.pkl is included in 
+# the Config.checkpoint_dir for posterity 
+
 def print_example(sparse_matrix, example_to_print, label_encoder):
     """
     Given a sparse matrix in Tensorflow's format, and 
     an integer indicating the example_to_print aka row,
-    iterate over the matrix and print out the desired elements.
-    
-    Note: This is very slow if example_to_print isn't at
-    the front.  Could be improved with some 
-    "where row == example_to_print" clauses.
+    iterate over the matrix and return the string representation
+    of the desired elements.
     """
+    # TODO Speed this function up with some 
+    # "where row == example_to_print" clauses.
     indices, values, shape = sparse_matrix
+    result_str = ""
     for (example, timestep), val in zip(indices, values):
         if example == example_to_print:
-            print(label_encoder.inverse_transform(val), end="" )
-    print()
+            result_str += label_encoder.inverse_transform(val)
+        if example > example_to_print:
+            # Break out early if we're past our point
+            break
+    return result_str
     
 def print_details_on_example(example_to_print, 
                              samples, lens, transcripts, 
@@ -61,7 +69,7 @@ def print_details_on_example(example_to_print,
     """
     Prints details of `example_to_print`: its input shape, 
     active timesteps, target text, and the beam results and their
-    probabilities.
+    probabilities as well as their auto-corrected versions.
     
     Inputs:
         example_to_print: integer indicating which example from batch
@@ -98,8 +106,11 @@ def print_details_on_example(example_to_print,
     for path_id, beam_result in enumerate(beam_decoded):
         if limit_beam_to and path_id >= limit_beam_to:
             break
-        print("    (%4.1f) " % beam_probs[example_to_print][path_id], end="")
-        print_example(beam_result, example_to_print, label_encoder)
+        ex_prob = beam_probs[example_to_print][path_id]
+        ex_str = print_example(beam_result, example_to_print, label_encoder)
+        ex_str_corr = " ".join([autocorrect.spell(word) for word in ex_str.split()])
+        print("    (%4.1f) %s" % (ex_prob, ex_str))
+        print("           %s" % (ex_str_corr))
     
     print()
     
@@ -168,6 +179,8 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
                                      epoch_loss_avg, epoch_wer_avg, 
                                      time.time() - epoch_start))
                     # Watch performance
+                    # TODO print this performance information to disk every n batches 
+                    # (e.g., 100) so we have a qualitative trace for performance over time
                     print_details_on_example(0, batched_samples[cur_batch_iter],
                                                 batched_sample_lens[cur_batch_iter],
                                                 batched_transcripts[cur_batch_iter],
@@ -287,6 +300,8 @@ def main(args):
     # TODO: add the ability to run a test on the training data
     # to check for overfitting -- aka add a validation set
     # and the setup for it
+    shutil.copy("code/config.py", Config.checkpoint_dir)
+    
     if args.phase == 'train':
         data, lens, transcripts, le = prep_data(args, 
                     Config.train_path, Config.feature_type, Config.mode)
