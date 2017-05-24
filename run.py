@@ -278,8 +278,6 @@ def prep_data(args, path_to_data, feature_type, mode):
             raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
         print("Labels restored")
     else:
-        if not os.path.exists(Config.checkpoint_dir):
-            os.makedirs(Config.checkpoint_dir)
         with open(label_fn, "wb") as f:
             pickle.dump(label_encoder, f)
         print("Labels stored")
@@ -301,6 +299,8 @@ def main(args):
     # TODO: add the ability to run a test on the training data
     # to check for overfitting -- aka add a validation set
     # and the setup for it
+    if not os.path.exists(Config.checkpoint_dir):
+        os.makedirs(Config.checkpoint_dir)
     if os.path.isfile(os.path.join(Config.checkpoint_dir, "config.py")):
         raise RuntimeError("There is already a configuration file in directory '%s' -- please restore it by hand to code/config.py or delete it" % Config.checkpoint_dir)
     shutil.copy("code/config.py", Config.checkpoint_dir)
