@@ -82,6 +82,7 @@ class SimpleEmgNN(object):
         cost = tf.reduce_mean(loss_without_invalid_paths) 
 
         self.loss = self.config.l2_lambda * l2_cost + cost
+        tf.summary.scalar("loss", self.loss)
 
     def add_optimizer_op(self):
         # Clips by global norm
@@ -94,18 +95,18 @@ class SimpleEmgNN(object):
         
 
     def add_decoder_and_wer_op(self):
-        (all_decoded_sequence,log_probabilities) = tf.nn.ctc_beam_search_decoder(inputs=self.logits, sequence_length=self.seq_lens_placeholder,
-                                  merge_repeated=False)
-        wer = tf.reduce_mean(tf.edit_distance(hypothesis=tf.cast(all_decoded_sequence[0],tf.int32), 
-                                            truth=self.targets_placeholder))
+        self.all_decoded_sequences, self.all_decoded_probs = tf.nn.ctc_beam_search_decoder(
+                                    inputs=self.logits, 
+                                    sequence_length=self.seq_lens_placeholder,
+                                    beam_width=self.config.beam_size, 
+                                    top_paths=self.config.beam_size,
+                                    merge_repeated=False)
+        decoded_sequence = tf.cast(self.all_decoded_sequences[0], tf.int32)
+        self.wer = tf.reduce_mean(tf.edit_distance(decoded_sequence,
+                                              self.targets_placeholder,
+                                              normalize=True))
+        tf.summary.scalar("wer", self.wer)
 
-        decoded_sequence = all_decoded_sequence[0]
-
-        tf.summary.scalar("loss", self.loss)
-        tf.summary.scalar("wer", wer)
-
-        self.decoded_sequence = decoded_sequence
-        self.wer = wer
 
     def add_summary_op(self):
         self.merged_summary_op = tf.summary.merge_all()
@@ -120,25 +121,29 @@ class SimpleEmgNN(object):
 
     def train_one_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
-        _, batch_cost, wer, batch_num_valid_ex, summary = session.run([self.train_op, 
-                                            self.loss, self.wer, 
-                                            self.num_valid_examples, 
-                                            self.merged_summary_op], 
+        _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.train_op, 
+                                            self.loss, 
+                                            self.wer, 
+                                            self.merged_summary_op,
+                                            self.all_decoded_sequences,
+                                            self.all_decoded_probs], 
                                             feed_dict)
 
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
 
-        return batch_cost, wer, summary
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
 
     def test_one_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
-        batch_cost, wer, batch_num_valid_ex, summary = session.run([self.loss, self.wer, 
-                                                    self.num_valid_examples, 
-                                                    self.merged_summary_op], 
-                                                    feed_dict)
-        return batch_cost, wer, summary
+        batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.loss, 
+                                                self.wer, 
+                                                self.merged_summary_op,
+                                                self.all_decoded_sequences,
+                                                self.all_decoded_probs], 
+                                                feed_dict)
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
     def get_config(self):
         return self.config

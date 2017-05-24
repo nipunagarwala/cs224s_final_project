@@ -37,7 +37,63 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 #
 # See config.py for additional configuration parameters.
 
-
+def print_example(sparse_matrix, example_to_print, label_encoder):
+    """
+    Given a sparse matrix in Tensorflow's format, and 
+    an integer indicating the example_to_print aka row,
+    iterate over the matrix and print out the desired elements.
+    
+    Note: This is very slow if example_to_print isn't at
+    the front.  Could be improved with some 
+    "where row == example_to_print" clauses.
+    """
+    indices, values, shape = sparse_matrix
+    for (example, timestep), val in zip(indices, values):
+        if example == example_to_print:
+            print(label_encoder.inverse_transform(val), end="" )
+    print()
+    
+def print_details_on_example(example_to_print, 
+                             samples, lens, transcripts, 
+                             beam_decoded, beam_probs,
+                             label_encoder):
+    """
+    Prints details of `example_to_print`: its input shape, 
+    active timesteps, target text, and the beam results and their
+    probabilities.
+    
+    Inputs:
+        example_to_print: integer indicating which example from batch
+            to drill down on
+        samples: a np.ndarray of shape (batch_size, max_timesteps, 
+            num_features)
+        lens: a np.ndarray of shape (batch_size,) in which each 
+            element reflects the number of active timesteps in the
+            corresponding example in `samples`
+        transcripts: a sparse 3-tuple; the first element is an array
+            of indices, the second element is an array of values,
+            and the third element is an array containing the size;
+            in dense form, the matrix is batch_size-by-max-length-of-
+            any-truth-text-in-batch 
+            (see utils.sparse_tuple_from for format)
+        beam_decoded: first output of tf.nn.ctc_beam_search_decoder
+        beam_probs: second output of tf.nn.ctc_beam_search_decoder
+        label_encoder: sklearn.preprocessing.LabelEncoder instance
+    """
+    # TODO: include information about the mode of the sample (silent/audible/etc.)
+    print("\nSample from batch")
+    print("  Input shape (max_timesteps, n_features): ", end="")
+    print(samples[example_to_print].shape)
+    print("  Input active timesteps: ", end="")
+    print(lens[example_to_print])
+    print("  Target:   ", end="")
+    print_example(transcripts, example_to_print, label_encoder)
+    print("  Decoded (beam): ")
+    for path_id, beam_result in enumerate(beam_decoded):
+        print("    (%4.1f) " % beam_probs[example_to_print][path_id], end="")
+        print_example(beam_result, example_to_print, label_encoder)
+    print()
+    
 def create_model(session, restore, alphabet_size):
     """
     Returns a model, which has been initialized in `session`.
@@ -84,7 +140,8 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
                 epoch_wer_avg = 0
                 for cur_batch_iter in range(len(batched_samples)):
                     # Do training step
-                    batch_cost, wer, summary = model.train_one_batch(session, 
+                    batch_cost, wer, summary, beam_decoded, beam_probs = model.train_one_batch(
+                                                    session, 
                                                     batched_samples[cur_batch_iter], 
                                                     batched_transcripts[cur_batch_iter], 
                                                     batched_sample_lens[cur_batch_iter])
@@ -101,22 +158,13 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
                                      epoch_loss_avg, epoch_wer_avg, 
                                      time.time() - epoch_start))
                     # Watch performance
-                    example_to_print = 0
-                    print("\nSample from batch")
-                    print("  Input shape (max_timesteps, n_features): ", end="")
-                    print(batched_samples[cur_batch_iter][example_to_print].shape)
-                    print("  Input active timesteps: ", end="")
-                    print(batched_sample_lens[cur_batch_iter][example_to_print])
-                    print("  Target: ", end="")
-                    # batched_transcripts are sparse vectors, as per utils.sparse_tuple_from
-                    tr_indices, tr_values, tr_shape = batched_transcripts[cur_batch_iter]
-                    for (example, timestep), val in zip(tr_indices, tr_values):
-                        if example == example_to_print:
-                            print(label_encoder.inverse_transform(val), end="" )
-                    print("\n")
-                    # TODO: print out the model's estimate on example_to_print 
-                    # TODO: moving the above watching performance material into a function
-                                     
+                    print_details_on_example(0, batched_samples[cur_batch_iter],
+                                                batched_sample_lens[cur_batch_iter],
+                                                batched_transcripts[cur_batch_iter],
+                                                beam_decoded,
+                                                beam_probs,
+                                                label_encoder)
+           
                     # Save checkpoints as per configuration
                     if global_step % Config.steps_per_checkpoint == 0:
                         # Checkpoints
@@ -146,7 +194,8 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
             test_wer_avg = 0
             for cur_batch_iter in range(len(batched_samples)):
                 # Do test step
-                batch_cost, wer, summary = model.test_one_batch(session, 
+                batch_cost, wer, summary, beam_decoded, beam_probs = model.test_one_batch(
+                                                session, 
                                                 batched_samples[cur_batch_iter], 
                                                 batched_transcripts[cur_batch_iter], 
                                                 batched_sample_lens[cur_batch_iter])

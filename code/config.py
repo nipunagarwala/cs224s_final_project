@@ -44,3 +44,6 @@ class Config(object):
     # We clip by global norm, such that the 
     # maximum norm globally is scaled to this value
     max_norm = 10 
+    
+    # Number of predictions to generate
+    beam_size = 10
