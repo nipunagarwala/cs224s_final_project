@@ -92,19 +92,12 @@ class SimpleEmgNN(object):
         
 
     def add_decoder_and_wer_op(self):
-        # TODO decide out if we want to set merge_repeated == True
-        # With merge_repeated=False:
-        #     (31.4) BOTH OUR CORPORATE AND FOUNDATION COONTRIBUTIONS ERE UPRP ATS WELLR IATO OUR INDIVIDUAL CONTRIBUTIONS
-        # With merge_repeated=True:
-        #     (31.4) BOTH OUR CORPORATE AND FOUNDATION CONTRIBUTIONS ERE UPRP ATS WELR IATO OUR INDIVIDUAL CONTRIBUTIONS
-        # (see "contributions", "wellr")
-
         self.all_decoded_sequences, self.all_decoded_probs = tf.nn.ctc_beam_search_decoder(
                                     inputs=self.logits, 
                                     sequence_length=self.seq_lens_placeholder,
                                     beam_width=self.config.beam_size, 
                                     top_paths=self.config.beam_size,
-                                    merge_repeated=False)
+                                    merge_repeated=True)
         decoded_sequence = tf.cast(self.all_decoded_sequences[0], tf.int32)
         
         # TODO: add autocorrection before wer, to retrieve both WER before and after autocorrect
