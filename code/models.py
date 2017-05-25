@@ -130,7 +130,7 @@ class SimpleEmgNN(object):
 
     def train_one_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
-        _, batch_cost, wer, summary, beam_decoded, beam_probs, b_m, p_m = session.run([self.train_op, 
+        _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.train_op, 
                                             self.loss, 
                                             self.wer, 
                                             self.merged_summary_op,
@@ -141,7 +141,7 @@ class SimpleEmgNN(object):
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
 
-        return batch_cost, wer, summary, beam_decoded, beam_probs, b_m, p_m
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
 
     def test_one_batch(self, session, input_batch, target_batch, seq_batch):
