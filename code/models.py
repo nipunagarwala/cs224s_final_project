@@ -92,6 +92,13 @@ class SimpleEmgNN(object):
         
 
     def add_decoder_and_wer_op(self):
+        # TODO decide out if we want to set merge_repeated == True
+        # With merge_repeated=False:
+        #     (31.4) BOTH OUR CORPORATE AND FOUNDATION COONTRIBUTIONS ERE UPRP ATS WELLR IATO OUR INDIVIDUAL CONTRIBUTIONS
+        # With merge_repeated=True:
+        #     (31.4) BOTH OUR CORPORATE AND FOUNDATION CONTRIBUTIONS ERE UPRP ATS WELR IATO OUR INDIVIDUAL CONTRIBUTIONS
+        # (see "contributions", "wellr")
+
         self.all_decoded_sequences, self.all_decoded_probs = tf.nn.ctc_beam_search_decoder(
                                     inputs=self.logits, 
                                     sequence_length=self.seq_lens_placeholder,
@@ -123,7 +130,7 @@ class SimpleEmgNN(object):
 
     def train_one_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
-        _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.train_op, 
+        _, batch_cost, wer, summary, beam_decoded, beam_probs, b_m, p_m = session.run([self.train_op, 
                                             self.loss, 
                                             self.wer, 
                                             self.merged_summary_op,
@@ -134,7 +141,7 @@ class SimpleEmgNN(object):
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
 
-        return batch_cost, wer, summary, beam_decoded, beam_probs
+        return batch_cost, wer, summary, beam_decoded, beam_probs, b_m, p_m
 
 
     def test_one_batch(self, session, input_batch, target_batch, seq_batch):

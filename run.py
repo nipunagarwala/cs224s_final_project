@@ -105,7 +105,9 @@ def print_details_on_example(example_to_print,
     ex_truth = generate_str_example(transcripts, example_to_print, label_encoder)
     print("  Target:  %s" % ex_truth)
     
-    print("  Decoded (top %s, with autocorrect): " % ("all" if limit_beam_to is None else str(limit_beam_to)))
+    print("  Decoded (top %s, %s autocorrect): " % 
+                ("all" if limit_beam_to is None else str(limit_beam_to), 
+                 "paired with" if show_autocorrect else "without" ))
     for path_id, beam_result in enumerate(beam_decoded):
         if limit_beam_to and path_id >= limit_beam_to:
             break
@@ -115,6 +117,7 @@ def print_details_on_example(example_to_print,
         if show_autocorrect:
             ex_str_corr = " ".join([autocorrect.spell(word) for word in ex_str.split()])
             print("           %s" % (ex_str_corr))
+    print()
     
 def create_model(session, restore, num_features, alphabet_size):
     """
