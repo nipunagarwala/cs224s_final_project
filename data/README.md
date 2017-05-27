@@ -30,7 +30,7 @@ each frame.
 The `utteranceInfo.pkl` file contains the metainformation (8 columns):
 * speakerId, sessionId, utteranceId, label, transcript, gender, mode, train/test split
 
-The file `utteranceInfoSample.pkl` for the sample data can be accessed as follows:
+The file `sample-data/train/utteranceInfo.pkl` for the sample data can be accessed as follows:
 
     >>> import pickle
     >>> import pandas
@@ -171,7 +171,7 @@ To understand the quality of those labels, I perform a hand analysis: by randoml
 
     Overall Quality (Total sub-segments)
             audible     whispered     silent
-    word    4.6  (62)   3.8  (65)     3.4  (57)
+    word    4.6  (62)   3.8   (65)    3.4  (57)
     phone   3.6 (194)   0.8  (194)    0.2 (188)
 
 From this analysis, we learn that:
@@ -179,7 +179,7 @@ From this analysis, we learn that:
 * We can somewhat trust the word-level data of whispered segments & silent segments, and the audible phone alignments.  These data have some mistaggings, but is on the whole understandable.  
 * It is inappropriate to use the phone-level information from whispered or silent speech.
 
-In the above, I've rated each sentence holistically according to its sub-segments on the following scale:
+In the above, I've rated each sentence holistically according to its sub-segments on the following scale before averaging across all sentences:
 
 * 5: excellent (perfect)
 * 4: good (mostly perfect, 1 or 2 errors)
