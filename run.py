@@ -233,6 +233,7 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                     if should_dev_report:
                         print("--------")
                         if dev_iter >= len(batched_samples_dev):
+                            dev_iter = 0
                             batched_samples_dev, batched_transcripts_dev, batched_sample_lens_dev = make_batches(
                                                                     samples_de, 
                                                                     sample_lens_de, 
@@ -339,7 +340,7 @@ def parse_commandline():
 def prep_data(args, path_to_data, feature_type, mode, label_encoder=None):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode)
+    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder)
     if label_encoder is None:
         samples, sample_lens, transcripts, label_encoder = feat_info
         # Store label_encoder to disk

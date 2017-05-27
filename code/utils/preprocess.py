@@ -281,7 +281,7 @@ def extract_features(pkl_filename, feature_type):
     else:
         raise RuntimeError("Invalid feature type specified")
 
-def extract_all_features(directory, feature_type, session_type=None):
+def extract_all_features(directory, feature_type, session_type=None, le=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -292,6 +292,8 @@ def extract_all_features(directory, feature_type, session_type=None):
         feature_type: either "wand", "wand_lda", or "spectrogram".
         session_type: None, "audible", "whispered", or "silent". if None, 
             extracts features for all sessions.
+        le: an existing label encoder; can be None if a new label_encoder
+            should be created
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
@@ -330,8 +332,9 @@ def extract_all_features(directory, feature_type, session_type=None):
         samples = wand_lda(samples, phone_labels)
 
     # Build the encodings
-    le = preprocessing.LabelEncoder()
-    le.fit(list(chain.from_iterable([list(x) for x in original_transcripts])))
+    if le is None:
+        le = preprocessing.LabelEncoder()
+        le.fit(list(chain.from_iterable([list(x) for x in original_transcripts])))
     transcripts = []
     for text in original_transcripts:
         transcripts.append(le.transform(list(text)))
