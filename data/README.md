@@ -168,17 +168,17 @@ The data comes in 3 splits. The corpus authors provide a train/test split for co
 * Train:
     * 1145 utterances (in ratio of 4-1-1: 771 audible, 187 whispered, 187 silent)
     * 406 unique transcripts (312 repeated once, 28 repeated 17 times, with repetition values in between)
-    * 91.8% male
     * 4 speakers (in data ratio of 6-1-1-4)
+    * 91.8% male
 * Dev: 
     * 315 utterances (in ratio of 4-1-1: 209 audible, 53 whispered, 53 silent)
     * 105 unique transcripts (79 repeated once, 8 repeated 17 times, with repetition values in between)
-    * 91.4% male
     * 4 speakers (in data ratio of 6-1-1-4)
+    * 91.4% male
 * Test:
     * 260 utterances (in ratio of 2-1-1: 140 audible, 60 whispered, 60 silent)
     * 10 unique transcripts (26 repeated 10 times)
-    * 88.5% male
     * 4 speakers (in data ratio of 3-1-1-4)
+    * 88.5% male
 
 Each train/dev/test split is a subdirectory of `data` folder, and each has its own `utteranceInfo.pkl` file. 
