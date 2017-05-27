@@ -161,6 +161,38 @@ We can access EMG data as above, unpacking it as follows:
 
 Because of the lower sampling frequency, there are fewer rows of EMG than of audio data.
 
+Quality of Annotations
+------
+The corpus authors provide estimates of the phone and word being uttered during each frame.  These are based on HMM alignment models on the audio track for the audible and whispered data, and those models plus another mapping for the silent data.  The corpus authors indicate that the alignments have not been explored by a human, and they make no representations as to quality, especially regarding the silent alignments.
+
+In our quest to know the dataset with which we're working, we would like to know the quality of the alignments for the following reasons: (1) If the quality is poor, this supports moving to a CTC framework that does not require correct alignments, (2) If the quality is excellent (even in particular modes, or for words and not phones), we can use this to inform data augmentation efforts.
+
+To understand the quality of those labels, I perform a hand analysis: by randomly selecting five audio utterances from each mode, I rate sample on a 5-point holistic scale as to the quality of its labels, and then average those scores.  For the silent data, which does not have an intelligible audio track, this analysis is facilitated through tells like plosives and length of segment.  The analysis is intended to provide signposts for the approximate quality of the data, rather than be an exhaustive qualitative study. Qualitative examples are available on Google Drive and in context/sampled.txt.
+
+Overall Quality (Total sub-segments)
+            audible     whispered     silent
+    word    4.6  (62)   3.8  (65)     3.4  (57)
+    phone   3.6 (194)   0.8  (194)    0.2 (188)
+
+From this analysis, we learn that:
+* We can trust the audible word-level data.  
+* We can somewhat trust the word-level data of whispered segments & silent segments, and the audible phone alignments.  These data have some mistaggings, but is on the whole understandable.  
+* It is inappropriate to use the phone-level information from whispered or silent speech.
+
+In the above, I've rated each sentence holistically according to its sub-segments on the following scale:
+
+* 5: excellent (perfect)
+* 4: good (mostly perfect, 1 or 2 errors)
+* 3: fair (has repeated mistaggings but is understandable)
+* 2: poor (medium-length subsegments are misstagged)
+* 1: awful (not understandable; long-length segments are entirely misstagged)
+* 0: zilch (almost entirely garbage -- any correctness seems random)
+
+I've averaged the scores of 5 sentences of each type to estimate the quality of tags (30 sentences total).
+
+
+
+
 Splits
 ------
 The data comes in 3 splits. The corpus authors provide a train/test split for compatibility with their reported results.  We split the training data further into a train/dev split (80-20).  Each transcript only occurs in a single split, though it might repeat within that split across speakers, modes, sessions, or within the same speaker/mode/session combination.  The final splits are:
