@@ -166,17 +166,17 @@ Splits
 The data comes in 3 splits. The corpus authors provide a train/test split for compatibility with their reported results.  We split the training data further into a train/dev split (80-20).  Each transcript only occurs in a single split, though it might repeat within that split across speakers, modes, sessions, or within the same speaker/mode/session combination.  The final splits are:
 
 * Train:
-    * 1145 utterances (in ratio of 4-1-1: 771 audible, 187 whispered, 187 whispered)
+    * 1145 utterances (in ratio of 4-1-1: 771 audible, 187 whispered, 187 silent)
     * 406 unique transcripts (312 repeated once, 28 repeated 17 times, with repetition values in between)
     * 91.8% male
     * 4 speakers (in data ratio of 6-1-1-4)
 * Dev: 
-    * 315 utterances (in ratio of 4-1-1: 209 audible, 53 whispered, 53 whispered)
+    * 315 utterances (in ratio of 4-1-1: 209 audible, 53 whispered, 53 silent)
     * 105 unique transcripts (79 repeated once, 8 repeated 17 times, with repetition values in between)
     * 91.4% male
     * 4 speakers (in data ratio of 6-1-1-4)
 * Test:
-    * 260 utterances (in ratio of 2-1-1: 140 audible, 60 whispered, 60 whispered)
+    * 260 utterances (in ratio of 2-1-1: 140 audible, 60 whispered, 60 silent)
     * 10 unique transcripts (26 repeated 10 times)
     * 88.5% male
     * 4 speakers (in data ratio of 3-1-1-4)
