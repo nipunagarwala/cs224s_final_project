@@ -53,7 +53,7 @@ class Config(object):
     num_epochs = 1000
     # Number of examples in each batch (should be as 
     # large as successfully fits in memory)
-    batch_size = 2
+    batch_size = 32
     
     # Initial step size for Adam optimizer
     learning_rate = 1e-3

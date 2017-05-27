@@ -24,12 +24,16 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
             length of sample batches_samples[x,y] in number of timesteps
     """
 
-    p = np.random.permutation(len(samples))
-
     n_batches = int(len(samples) / batch_size)
     if n_batches < 1:
         raise ValueError("Must have at least one batch of size %d to train model, but there are only %d datapoints available " % (batch_size, len(samples)))
-                
+        
+    # Randomly permute the batches
+    p = np.random.permutation(len(samples))
+    samples = samples[p]
+    sample_lens = sample_lens[p]
+    transcripts = transcripts[p]
+    
     batched_samples = []
     batched_sample_lens = []
     batched_transcripts = []
