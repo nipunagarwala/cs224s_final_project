@@ -16,7 +16,7 @@ and creates utteranceInfo.pkl.
 
 with open("data/train/utteranceInfo.pkl", "rb") as f:
     meta = pickle.load(f)
-    
+
 PROB_OF_TRAINING = 0.8
 
 
@@ -45,6 +45,7 @@ for use_count in num_uses:
     t_transcripts, d_transcripts = train_test_split(transcript_values, train_size=PROB_OF_TRAINING, random_state=42)
     train.append( meta[meta["transcript"].isin(t_transcripts)] )
     dev.append( meta[meta["transcript"].isin(d_transcripts)] )
+
 train = pd.concat(train)
 dev = pd.concat(dev)
     
@@ -52,22 +53,27 @@ dev["split"] = "dev"
 
 # Move around the results
 directory = "data/train"
+newtrain = os.path.join(directory, "newtrain")
+os.mkdir(newtrain)
 for i, utterance in train.iterrows():
     old_pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
     assert( utterance["split"] == "train" )
-    new_pkl_filename = os.path.join(directory, "newtrain")#, utterance["label"] + ".pkl")
-    shutil.copy(old_pkl_filename, new_pkl_filename)
+    new_pkl_filename = os.path.join(newtrain, utterance["label"] + ".pkl")
+    os.rename(old_pkl_filename, new_pkl_filename)
+
+newdev = os.path.join(directory, "newdev")
+os.mkdir(newdev)
 for i, utterance in dev.iterrows():
     old_pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
     assert( utterance["split"] == "dev" )
-    new_pkl_filename = os.path.join(directory, "newdev")#, utterance["label"] + ".pkl")
-    shutil.copy(old_pkl_filename, new_pkl_filename)
+    new_pkl_filename = os.path.join(newdev, utterance["label"] + ".pkl")
+    os.rename(old_pkl_filename, new_pkl_filename)
 
 
 # Write out the meta info 
 with open(os.path.join(directory, "newtrain", "utteranceInfo.pkl"), "wb") as f: 
     pickle.dump(train, f)
-    
+
 with open(os.path.join(directory, "newdev", "utteranceInfo.pkl"), "wb") as f: 
     pickle.dump(dev, f)
     
