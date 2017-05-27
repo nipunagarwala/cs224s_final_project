@@ -62,7 +62,7 @@ def generate_str_example(sparse_matrix, example_to_print, label_encoder):
             break
     return result_str
     
-def print_details_on_example(example_to_print, 
+def print_details_on_example(example_to_print, split,
                              samples, lens, transcripts, 
                              beam_decoded, beam_probs,
                              label_encoder,
@@ -76,6 +76,8 @@ def print_details_on_example(example_to_print,
     Inputs:
         example_to_print: integer indicating which example from batch
             to drill down on
+        split: a string indicating which split the data is from
+            (e.g., "train", "dev", "test")
         samples: a np.ndarray of shape (batch_size, max_timesteps, 
             num_features)
         lens: a np.ndarray of shape (batch_size,) in which each 
@@ -96,7 +98,7 @@ def print_details_on_example(example_to_print,
         limit_beam_to: integer or None; None prints entire beam
     """
     # TODO: include information about the mode of the sample (silent/audible/etc.)
-    print("\nSample %d from batch:" % example_to_print)
+    print("\nSample %d from a %s batch:" % (example_to_print, split))
     
     print("  Input shape (max_timesteps, n_features): ", end="")
     print(samples[example_to_print].shape)
@@ -146,21 +148,30 @@ def create_model(session, restore, num_features, alphabet_size):
             
     return model
 
-def train_model(args, samples, sample_lens, transcripts, label_encoder):  
+def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
+                      samples_de, sample_lens_de, transcripts_de):  
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
             model = create_model(session, args.restore, 
-                        samples.shape[-1], len(label_encoder.classes_)+1)
+                        samples_tr.shape[-1], len(label_encoder.classes_)+1)
             
             # Create a tensorboard writer for this session
-            logs_path = os.path.join(Config.tensorboard_dir, 
-                             strftime("%Y_%m_%d_%H_%M_%S", gmtime()), "train")
-            train_writer = tf.summary.FileWriter(logs_path, session.graph)
+            start_time = strftime("%Y_%m_%d_%H_%M_%S", gmtime())
+            logs_path_train = os.path.join(Config.tensorboard_dir, start_time , "train")
+            logs_path_dev = os.path.join(Config.tensorboard_dir, start_time , "dev")
+            train_writer = tf.summary.FileWriter(logs_path_train)#, session.graph)
+            dev_writer = tf.summary.FileWriter(logs_path_dev)#, session.graph)
             
             # Perform the training
+            dev_iter = 0
+            batched_samples_dev = []
             for cur_epoch in range(Config.num_epochs):
-                batched_samples, batched_transcripts, batched_sample_lens = make_batches(samples, sample_lens, transcripts, Config.batch_size)
+                batched_samples, batched_transcripts, batched_sample_lens = make_batches(
+                                                                    samples_tr, 
+                                                                    sample_lens_tr, 
+                                                                    transcripts_tr, 
+                                                                    Config.batch_size)
 
                 epoch_start = time.time()
                 epoch_losses = []
@@ -168,7 +179,7 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
                 for iter, cur_batch_iter in enumerate(range(len(batched_samples))):
                     # Do training step
                     batch_start = time.time()
-                    batch_cost, batch_wer, summary, beam_decoded, beam_probs = model.train_one_batch(
+                    batch_cost, batch_wer, train_summary, beam_decoded, beam_probs = model.train_one_batch(
                                                     session, 
                                                     batched_samples[cur_batch_iter], 
                                                     batched_transcripts[cur_batch_iter], 
@@ -176,46 +187,88 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
 
                     global_step = model.global_step.eval()
 
-                    # Show information to user
-                    batch_end = time.time()
-                    batch_time = batch_end - batch_start
-                    epoch_losses.append(batch_cost)
-                    epoch_weres.append(batch_wer)
-                    log = "Epoch {}/{}, overall step {}, batch {}/{} in epoch"
-                    print(log.format(cur_epoch+1, 
-                                     Config.num_epochs,
-                                     global_step,
-                                     iter+1,
-                                     len(batched_samples)))
-                    log = "    batch cost = {:.3f}, wer = {:.3f}, time = {:.3f}"
-                    print(log.format(batch_cost,
-                                     batch_wer,
-                                     batch_time))
-                    log = "    overall cost = {:.3f}+/-{:.3f}, wer = {:.3f}+/-{:.3f}, est epoch time = {:.3f} hrs (95%CI)"
-                    print(log.format(np.mean(epoch_losses),
-                                     2*scipy.stats.sem(epoch_losses),
-                                     np.mean(epoch_weres),
-                                     2*scipy.stats.sem(epoch_weres),
-                                     ((Config.num_epochs / len(batched_samples)) * batch_time) / 3600.
-                                     ))
-                    # Watch performance
-                    # TODO print this performance information to disk every n batches 
-                    # (e.g., 100) so we have a qualitative trace for performance over time
-                    print_details_on_example(0, batched_samples[cur_batch_iter],
-                                                batched_sample_lens[cur_batch_iter],
-                                                batched_transcripts[cur_batch_iter],
-                                                beam_decoded,
-                                                beam_probs,
-                                                label_encoder)
-           
+                    should_train_report = (global_step % Config.steps_per_train_report == 0)
+                    should_dev_report = (global_step % Config.steps_per_dev_report == 0)
+                    should_checkpoint = (global_step % Config.steps_per_checkpoint == 0)
+                    
+                    # Monitor training -- training performance
+                    if should_train_report:
+                        # Print training information
+                        batch_end = time.time()
+                        batch_time = batch_end - batch_start
+                        epoch_losses.append(batch_cost)
+                        epoch_weres.append(batch_wer)
+                        log = "Epoch {}/{}, overall step {}, batch {}/{} in epoch"
+                        print(log.format(cur_epoch+1, 
+                                         Config.num_epochs,
+                                         global_step,
+                                         iter+1,
+                                         len(batched_samples)))
+                        log = "    batch cost = {:.3f}, wer = {:.3f}, time = {:.3f}"
+                        print(log.format(batch_cost,
+                                         batch_wer,
+                                         batch_time))
+                        log = "    overall cost = {:.3f}+/-{:.3f}, wer = {:.3f}+/-{:.3f}, est epoch time = {:.3f} hrs (95%CI)"
+                        print(log.format(np.mean(epoch_losses),
+                                         2*scipy.stats.sem(epoch_losses),
+                                         np.mean(epoch_weres),
+                                         2*scipy.stats.sem(epoch_weres),
+                                         ((Config.num_epochs / len(batched_samples)) * batch_time) / 3600.
+                                         ))
+                        # Watch performance
+                        # TODO print this performance information to disk every n batches 
+                        # (e.g., 100) so we have a qualitative trace for performance over time
+                        print_details_on_example(0, "train", batched_samples[cur_batch_iter],
+                                                    batched_sample_lens[cur_batch_iter],
+                                                    batched_transcripts[cur_batch_iter],
+                                                    beam_decoded,
+                                                    beam_probs,
+                                                    label_encoder)
+
+                        # Tensorboard -- training
+                        train_writer.add_summary(train_summary, global_step)          
+          
+          
+                    # Monitor training -- dev performance
+                    if should_dev_report:
+                        print("--------")
+                        if dev_iter >= len(batched_samples_dev):
+                            batched_samples_dev, batched_transcripts_dev, batched_sample_lens_dev = make_batches(
+                                                                    samples_de, 
+                                                                    sample_lens_de, 
+                                                                    transcripts_de, 
+                                                                    Config.batch_size)
+                        
+                        dev_cost, dev_wer, dev_summary, dev_beam_decoded, dev_beam_probs = model.test_one_batch(
+                                                session, 
+                                                batched_samples_dev[dev_iter], 
+                                                batched_transcripts_dev[dev_iter], 
+                                                batched_sample_lens_dev[dev_iter])
+                        log = "DEV: batch cost = {:.3f}, wer = {:.3f}"
+                        print(log.format(dev_cost, dev_wer))
+                        
+                        # Watch performance
+                        print_details_on_example(0, "dev", batched_samples_dev[dev_iter],
+                                                    batched_sample_lens_dev[dev_iter],
+                                                    batched_transcripts_dev[dev_iter],
+                                                    dev_beam_decoded,
+                                                    dev_beam_probs,
+                                                    label_encoder)
+                                                    
+                        # Tensorboard -- dev results
+                        dev_writer.add_summary(dev_summary, global_step) 
+                        
+                        # Increment dev_iter
+                        dev_iter += 1
+                        print("--------")
+                        
+                    
                     # Save checkpoints as per configuration
-                    if global_step % Config.steps_per_checkpoint == 0:
+                    if should_checkpoint:
                         # Checkpoints
                         checkpoint_path = os.path.join(Config.checkpoint_dir, "checkpoint.ckpt")
                         model.saver.save(session, checkpoint_path, 
                                                 global_step=model.global_step)
-                        # Tensorboard
-                        train_writer.add_summary(summary, global_step)
 
 
 def test_model(args, samples, sample_lens, transcripts, label_encoder):
@@ -252,7 +305,7 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                 num_examples_in_batch = beam_probs.shape[0]
                 for example_id in range(num_examples_in_batch):
                     # TODO dump the test results to a file rather than to screen
-                    print_details_on_example(example_id, batched_samples[cur_batch_iter],
+                    print_details_on_example(example_id, "test", batched_samples[cur_batch_iter],
                                                         batched_sample_lens[cur_batch_iter],
                                                         batched_transcripts[cur_batch_iter],
                                                         beam_decoded,
@@ -283,25 +336,19 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data, feature_type, mode):
+def prep_data(args, path_to_data, feature_type, mode, label_encoder=None):
     print("Extracting features")
     # Extract features
     feat_info = extract_all_features(path_to_data, feature_type, mode)
-    samples, sample_lens, transcripts, label_encoder = feat_info
-    
-    # Restore labels from disk instead of restoring
-    label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
-    if args.restore:
-        if label_fn and os.path.isfile(label_fn):
-            with open(label_fn, "rb") as f:
-                label_encoder = pickle.load(f)
-        else:
-            raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
-        print("Labels restored")
-    else:
+    if label_encoder is None:
+        samples, sample_lens, transcripts, label_encoder = feat_info
+        # Store label_encoder to disk
+        label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
         with open(label_fn, "wb") as f:
             pickle.dump(label_encoder, f)
         print("Labels stored")
+    else:
+        samples, sample_lens, transcripts, _ = feat_info
     
     # Verify to user load succeeded
     print("------")
@@ -317,9 +364,8 @@ def prep_data(args, path_to_data, feature_type, mode):
     return samples, sample_lens, transcripts, label_encoder
   
 def main(args):
-    # TODO: add the ability to run a test on the training data
-    # to check for overfitting -- aka add a validation set
-    # and the setup for it
+    # TODO make the storing of config files with the more natural -- 
+    # perhaps in json rather than in code 
     if not os.path.exists(Config.checkpoint_dir):
         os.makedirs(Config.checkpoint_dir)
     if os.path.isfile(os.path.join(Config.checkpoint_dir, "config.py")):
@@ -327,16 +373,34 @@ def main(args):
     shutil.copy("code/config.py", Config.checkpoint_dir)
     
     if args.phase == 'train':
-        data, lens, transcripts, le = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode)
-        train_model(args, data, lens, transcripts, le)
-        
+        # Get the training data
+        data_tr, lens_tr, transcripts_tr, le = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, None)
+        # Get the dev data using the same label_encoder
+        data_de, lens_de, transcripts_de, _ = prep_data(args, 
+                    Config.dev_path, Config.feature_type, Config.mode, le)
+        # Run model training         
+        train_model(args, data_tr, lens_tr, transcripts_tr, le,
+                          data_de, lens_de, transcripts_de)
+    
     elif args.phase == 'test':
         args.restore = True
-        data, lens, transcripts, le = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode)
-        test_model(args, data, lens, transcripts, le)
         
+        # Retrieve labels
+        label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
+        if label_fn and os.path.isfile(label_fn):
+            with open(label_fn, "rb") as f:
+                label_encoder = pickle.load(f)
+            print("Labels restored")
+        else:
+            raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
+            
+        # Prep data
+        data, lens, transcripts, _ = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, label_encoder)
+        # Run the model test           
+        test_model(args, data, lens, transcripts, label_encoder)
+    
     else:
         raise RuntimeError("Phase '%s' is unknown" % args.phase)
 

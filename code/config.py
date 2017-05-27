@@ -10,14 +10,23 @@ class Config(object):
     freq_of_longterm_checkpoint = 0.5     # in hours
     
     ##########################
+    # Reporting configuration
+    ##########################
+    # Frequency with which to print quant & qual 
+    # monitoring information to stdout for user enjoyment
+    steps_per_train_report = 1
+    steps_per_dev_report = 10
+    
+    ##########################
     # Data
     ##########################
     train_path = "data/train"
-    test_path = "data/test" # "sample-data/test"
+    dev_path =   "data/dev"
+    test_path =  "data/test"
     
     # What mode to use
     # Valid modes: None (meaning all), "audible", "whispered", "silent"
-    mode = "audible"
+    mode = None
     
     # What type of features to extract from the data
     # Valid feature_types: "wand_lda", "wand", "spectrogram"
@@ -44,7 +53,7 @@ class Config(object):
     num_epochs = 1000
     # Number of examples in each batch (should be as 
     # large as successfully fits in memory)
-    batch_size = 5
+    batch_size = 2
     
     # Initial step size for Adam optimizer
     learning_rate = 1e-3
