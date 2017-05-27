@@ -170,7 +170,8 @@ In our quest to know the dataset with which we're working, we would like to know
 To understand the quality of those labels, I perform a hand analysis: by randomly selecting five audio utterances from each mode, I rate sample on a 5-point holistic scale as to the quality of its labels, and then average those scores.  For the silent data, which does not have an intelligible audio track, this analysis is facilitated through tells like plosives and length of segment.  The analysis is intended to provide signposts for the approximate quality of the data, rather than be an exhaustive qualitative study. Qualitative examples are available on Google Drive and in context/sampled.txt.
 
 Overall Quality (Total sub-segments)
-            audible     whispered     silent
+
+    _____   audible     whispered     silent
     word    4.6  (62)   3.8  (65)     3.4  (57)
     phone   3.6 (194)   0.8  (194)    0.2 (188)
 
