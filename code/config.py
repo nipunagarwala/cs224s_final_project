@@ -12,16 +12,16 @@ class Config(object):
     ##########################
     # Data
     ##########################
-    train_path = "sample-data/train"
-    test_path = "sample-data/train" # "sample-data/test"
+    train_path = "data/train"
+    test_path = "data/test" # "sample-data/test"
     
     # What mode to use
     # Valid modes: None (meaning all), "audible", "whispered", "silent"
-    mode = None
+    mode = "audible"
     
     # What type of features to extract from the data
     # Valid feature_types: "wand_lda", "wand", "spectrogram"
-    feature_type = "spectrogram"
+    feature_type = "wand_lda"
        
     ##########################
     # Model architecture

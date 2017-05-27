@@ -11,6 +11,7 @@ import argparse
 import pickle
 import shutil
 import autocorrect
+import scipy
 
 import numpy as np 
 import tensorflow as tf
@@ -162,11 +163,12 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
                 batched_samples, batched_transcripts, batched_sample_lens = make_batches(samples, sample_lens, transcripts, Config.batch_size)
 
                 epoch_start = time.time()
-                epoch_loss_avg = 0
-                epoch_wer_avg = 0
-                for cur_batch_iter in range(len(batched_samples)):
+                epoch_losses = []
+                epoch_weres = []
+                for iter, cur_batch_iter in enumerate(range(len(batched_samples))):
                     # Do training step
-                    batch_cost, wer, summary, beam_decoded, beam_probs = model.train_one_batch(
+                    batch_start = time.time()
+                    batch_cost, batch_wer, summary, beam_decoded, beam_probs = model.train_one_batch(
                                                     session, 
                                                     batched_samples[cur_batch_iter], 
                                                     batched_transcripts[cur_batch_iter], 
@@ -175,14 +177,27 @@ def train_model(args, samples, sample_lens, transcripts, label_encoder):
                     global_step = model.global_step.eval()
 
                     # Show information to user
-                    log = "Epoch {}/{}, overall step {}, train_cost = {:.3f}, train_wer = {:.3f}, time = {:.3f}"
-                    epoch_loss_avg += (batch_cost - epoch_loss_avg)/(cur_batch_iter+1)
-                    epoch_wer_avg += (wer - epoch_wer_avg)/(cur_batch_iter+1)
+                    batch_end = time.time()
+                    batch_time = batch_end - batch_start
+                    epoch_losses.append(batch_cost)
+                    epoch_weres.append(batch_wer)
+                    log = "Epoch {}/{}, overall step {}, batch {}/{} in epoch"
                     print(log.format(cur_epoch+1, 
-                                     Config.num_epochs, 
-                                     global_step, 
-                                     epoch_loss_avg, epoch_wer_avg, 
-                                     time.time() - epoch_start))
+                                     Config.num_epochs,
+                                     global_step,
+                                     iter+1,
+                                     len(batched_samples)))
+                    log = "    batch cost = {:.3f}, wer = {:.3f}, time = {:.3f}"
+                    print(log.format(batch_cost,
+                                     batch_wer,
+                                     batch_time))
+                    log = "    overall cost = {:.3f}+/-{:.3f}, wer = {:.3f}+/-{:.3f}, est epoch time = {:.3f} hrs (95%CI)"
+                    print(log.format(np.mean(epoch_losses),
+                                     2*scipy.stats.sem(epoch_losses),
+                                     np.mean(epoch_weres),
+                                     2*scipy.stats.sem(epoch_weres),
+                                     ((Config.num_epochs / len(batched_samples)) * batch_time) / 3600.
+                                     ))
                     # Watch performance
                     # TODO print this performance information to disk every n batches 
                     # (e.g., 100) so we have a qualitative trace for performance over time
