@@ -160,8 +160,8 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
             start_time = strftime("%Y_%m_%d_%H_%M_%S", gmtime())
             logs_path_train = os.path.join(Config.tensorboard_dir, start_time , "train")
             logs_path_dev = os.path.join(Config.tensorboard_dir, start_time , "dev")
-            train_writer = tf.summary.FileWriter(logs_path_train)#, session.graph)
-            dev_writer = tf.summary.FileWriter(logs_path_dev)#, session.graph)
+            train_writer = tf.summary.FileWriter(logs_path_train, session.graph)
+            dev_writer = tf.summary.FileWriter(logs_path_dev, session.graph)
             
             # Perform the training
             dev_iter = 0
@@ -226,7 +226,8 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                                                     label_encoder)
 
                         # Tensorboard -- training
-                        train_writer.add_summary(train_summary, global_step)          
+                        train_writer.add_summary(train_summary, global_step)   
+                        train_writer.flush()
           
           
                     # Monitor training -- dev performance
@@ -257,7 +258,8 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                                                     label_encoder)
                                                     
                         # Tensorboard -- dev results
-                        dev_writer.add_summary(dev_summary, global_step) 
+                        dev_writer.add_summary(dev_summary, global_step)
+                        dev_writer.flush()
                         
                         # Increment dev_iter
                         dev_iter += 1
@@ -315,6 +317,7 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                                                         limit_beam_to=1)
                 # Write to Tensorboard
                 test_writer.add_summary(summary, global_step)
+                test_writer.flush()
                 
             log = "Test_cost = {:.3f}, test_wer = {:.3f}, time = {:.3f}"
             print(log.format(test_loss_avg, test_wer_avg, 
