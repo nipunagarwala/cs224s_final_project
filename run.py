@@ -18,7 +18,7 @@ import tensorflow as tf
 from time import gmtime, strftime
 
 from code.config import Config
-from code.models import SimpleEmgNN
+from code.models import SimpleEmgNN, MultiModalEmgNN
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches, compute_wer
 
@@ -148,6 +148,7 @@ def create_model(session, restore, num_features, alphabet_size):
     """
     print("Creating model")
     model = SimpleEmgNN(Config, num_features, alphabet_size)
+    # model = MultiModalEmgNN(Config, Config, Config, Config, num_features, alphabet_size)
     
     ckpt = tf.train.get_checkpoint_state(Config.checkpoint_dir)
     if restore:

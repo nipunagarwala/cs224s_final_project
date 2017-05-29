@@ -154,10 +154,11 @@ class SimpleEmgNN(object):
 
 class MultiModalEmgNN(object):
 
-    def __init__(self, config_audio,config_whisp,config_silent, num_features, alphabet_size):
+    def __init__(self, config_audio, config_whisp, config_silent, config_shared, num_features, alphabet_size):
         self.config_audio = config_audio
         self.config_whisp = config_whisp
         self.config_silent = config_silent
+        self.config_shared = config_shared
         self.audible_scope = 'audible'
         self.whisp_scope = 'whispered'
         self.silent_scope = 'silent'
@@ -166,12 +167,39 @@ class MultiModalEmgNN(object):
         self.num_features = num_features
         self.alphabet_size = alphabet_size
                
-        if self.config.cell_type == 'rnn':
-            self.cell = tf.contrib.rnn.RNNCell
-        elif self.config.cell_type == 'gru':
-            self.cell = tf.contrib.rnn.GRUCell
-        elif self.config.cell_type == 'lstm':
-            self.cell = tf.contrib.rnn.LSTMCell
+        if self.config_audio.cell_type == 'rnn':
+            self.audible_cell = tf.contrib.rnn.RNNCell
+        elif self.config_audio.cell_type == 'gru':
+            self.audible_cell = tf.contrib.rnn.GRUCell
+        elif self.config_audio.cell_type == 'lstm':
+            self.audible_cell = tf.contrib.rnn.LSTMCell
+        else:
+            raise ValueError('Input correct cell type')
+
+        if self.config_whisp.cell_type == 'rnn':
+            self.whisp_cell = tf.contrib.rnn.RNNCell
+        elif self.config_whisp.cell_type == 'gru':
+            self.whisp_cell = tf.contrib.rnn.GRUCell
+        elif self.config_whisp.cell_type == 'lstm':
+            self.whisp_cell = tf.contrib.rnn.LSTMCell
+        else:
+            raise ValueError('Input correct cell type')
+
+        if self.config_silent.cell_type == 'rnn':
+            self.silent_cell = tf.contrib.rnn.RNNCell
+        elif self.config_silent.cell_type == 'gru':
+            self.silent_cell = tf.contrib.rnn.GRUCell
+        elif self.config_silent.cell_type == 'lstm':
+            self.silent_cell = tf.contrib.rnn.LSTMCell
+        else:
+            raise ValueError('Input correct cell type')
+
+        if self.config_shared.cell_type == 'rnn':
+            self.shared_cell = tf.contrib.rnn.RNNCell
+        elif self.config_shared.cell_type == 'gru':
+            self.shared_cell = tf.contrib.rnn.GRUCell
+        elif self.config_shared.cell_type == 'lstm':
+            self.shared_cell = tf.contrib.rnn.LSTMCell
         else:
             raise ValueError('Input correct cell type')
 
@@ -186,7 +214,7 @@ class MultiModalEmgNN(object):
         
         # Needs to be last line -- graph must be created before saver is created
         self.saver = tf.train.Saver(tf.global_variables(), 
-                           keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
+                           keep_checkpoint_every_n_hours=self.config_shared.freq_of_longterm_checkpoint)
 
     def add_placeholders(self):
         self.inputs_audio_placeholder = tf.placeholder(tf.float32, 
@@ -212,11 +240,11 @@ class MultiModalEmgNN(object):
         self.seq_lens_silent_placeholder = tf.placeholder(tf.int32, shape=(None), name='seq_len_audio')
 
     
-    def build_rnn_model(self, inputs, seq_len, config, model_scope, shared_scope, reuse):
+    def build_rnn_model(self, inputs, seq_len, config, model_cell, shared_cell, model_scope, shared_scope, reuse):
         output_model = None
         state_output = None
         with tf.variable_scope(model_scope):
-            rnnNet_model = tf.contrib.rnn.MultiRNNCell([self.cell(config.hidden_size) 
+            rnnNet_model = tf.contrib.rnn.MultiRNNCell([model_cell(config.hidden_size) 
                                               for _ in range(config.num_layers)])
             output_model, state_output = tf.nn.dynamic_rnn(rnnNet_model, inputs,
                         sequence_length=seq_len,
@@ -228,8 +256,8 @@ class MultiModalEmgNN(object):
             if reuse:
                 tf.get_variable_scope().reuse_variables()
 
-            rnnNet_shared = tf.contrib.rnn.MultiRNNCell([self.cell(config.hidden_size) 
-                                              for _ in range(config.num_layers)])
+            rnnNet_shared = tf.contrib.rnn.MultiRNNCell([shared_cell(config.hidden_size,
+                        reuse=reuse) for _ in range(config.num_layers)])
             output_shared, state_shared = tf.nn.dynamic_rnn(rnnNet_shared, output_model,
                         sequence_length=seq_len,
                         dtype=tf.float32)
@@ -245,11 +273,14 @@ class MultiModalEmgNN(object):
 
     def build_model(self):
         self.audible_logits = self.build_rnn_model(self.inputs_audio_placeholder, self.seq_lens_audio_placeholder, 
-                                self.config_audio, self.audible_scope, self.shared_scope, False)
+                                self.config_audio,self.audible_cell, self.shared_cell,  self.audible_scope,
+                                self.shared_scope, False)
         self.whisp_logits = self.build_rnn_model(self.inputs_whisp_placeholder, self.seq_lens_whisp_placeholder, 
-                                self.config_whisp, self.whisp_scope, self.shared_scope, True)
+                                self.config_whisp,self.whisp_cell, self.shared_cell, self.whisp_scope,
+                                self.shared_scope, True)
         self.silent_logits = self.build_rnn_model(self.inputs_silent_placeholder, self.seq_lens_silent_placeholder, 
-                                self.config_silent, self.silent_scope, self.shared_scope, True)
+                                self.config_silent,self.silent_cell, self.shared_cell, self.silent_scope, 
+                                self.shared_scope, True)
 
     def add_model_loss_op(self, logits, targets, seq_len, config, summary_name, model_scope, shared_scope):
         logits = tf.transpose(logits,perm=[1,0,2])
