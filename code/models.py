@@ -154,7 +154,7 @@ class SimpleEmgNN(object):
 
 class MultiModalEmgNN(object):
 
-     def __init__(self, config_audio,config_whisp,config_silent, num_features, alphabet_size):
+    def __init__(self, config_audio,config_whisp,config_silent, num_features, alphabet_size):
         self.config_audio = config_audio
         self.config_whisp = config_whisp
         self.config_silent = config_silent
@@ -189,7 +189,6 @@ class MultiModalEmgNN(object):
                            keep_checkpoint_every_n_hours=self.config.freq_of_longterm_checkpoint)
 
     def add_placeholders(self):
-        
         self.inputs_audio_placeholder = tf.placeholder(tf.float32, 
                                     shape=(None, None, self.num_features), name='input_audio')
 
@@ -206,7 +205,7 @@ class MultiModalEmgNN(object):
         self.seq_lens_whisp_placeholder = tf.placeholder(tf.int32, shape=(None), name='seq_len_whisp')
 
         self.inputs_silent_placeholder = tf.placeholder(tf.float32, 
-                                    shape=(None, None, self.num_features),, name='input_silent')
+                                    shape=(None, None, self.num_features), name='input_silent')
 
         self.targets_silent_placeholder = tf.sparse_placeholder(tf.int32, name='targets_silent')
 
@@ -329,17 +328,17 @@ class MultiModalEmgNN(object):
 
 
     def add_decoder_and_wer_op(self):
-        self.audible_decoded_seq, self.audible_decoded_probs \
-            self.audible_wer = self.add_model_results_op(self.audible_logits, self.seq_lens_audio_placeholder, 
-                       self.config_audio, self.targets_audio_placeholder, 'audible_wer')
+        self.audible_decoded_seq, self.audible_decoded_probs, self.audible_wer = \
+            self.add_model_results_op(self.audible_logits, self.seq_lens_audio_placeholder, 
+                                      self.config_audio, self.targets_audio_placeholder, 'audible_wer')
 
-        self.whisp_decoded_seq, self.whisp_decoded_probs \
-            self.whisp_wer = self.add_model_results_op(self.whisp_logits, self.seq_lens_whisp_placeholder, 
-                       self.config_whisp, self.targets_whisp_placeholder, 'whisp_wer')
+        self.whisp_decoded_seq, self.whisp_decoded_probs, self.whisp_wer = \
+            self.add_model_results_op(self.whisp_logits, self.seq_lens_whisp_placeholder, 
+                                      self.config_whisp, self.targets_whisp_placeholder, 'whisp_wer')
 
-        self.silent_decoded_seq, self.silent_decoded_probs \
-            self.silent_wer = self.add_model_results_op(self.silent_logits, self.seq_lens_silent_placeholder, 
-                       self.config_silent, self.targets_silent_placeholder, 'silent_wer')
+        self.silent_decoded_seq, self.silent_decoded_probs, self.silent_wer = \
+            self.add_model_results_op(self.silent_logits, self.seq_lens_silent_placeholder, 
+                                      self.config_silent, self.targets_silent_placeholder, 'silent_wer')
 
 
     def add_summary_op(self):

@@ -334,7 +334,7 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
     # Build the encodings
     if le is None:
         le = preprocessing.LabelEncoder()
-        le.fit(list(chain.from_iterable([list(x) for x in original_transcripts])))
+        le.fit(list(chain.from_iterable(list(x) for x in original_transcripts)))
     transcripts = []
     for text in original_transcripts:
         transcripts.append(le.transform(list(text)))
