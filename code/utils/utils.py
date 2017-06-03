@@ -26,7 +26,7 @@ def compute_cer(true_transcripts, decoded_transcripts):
     cers = []
     for target, decoded in zip(true_transcripts, decoded_transcripts):
         distance = editdistance.eval(target, decoded)
-        cer = distance / len(target_words)
+        cer = distance / len(target)
         cers.append(cer)
     return np.mean(cers)
 
