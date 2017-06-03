@@ -8,6 +8,7 @@ import os
 import scipy.signal
 
 import numpy as np
+import pandas as pd
 
 from itertools import chain
 from collections import Counter
@@ -281,7 +282,8 @@ def extract_features(pkl_filename, feature_type):
     else:
         raise RuntimeError("Invalid feature type specified")
 
-def extract_all_features(directory, feature_type, session_type=None, le=None):
+def extract_all_features(directory, feature_type, session_type=None, 
+    le=None, dummies=None, dummy_train=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -294,6 +296,11 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
             extracts features for all sessions.
         le: an existing label encoder; can be None if a new label_encoder
             should be created
+        dummies: a list of column names from utteranceInfo for which to create
+            dummies to feed in over time, or None if no dummies should be created
+            (e.g., dummies=["speakerId", "speakerSess", "gender", "mode"] )
+        dummy_train: a pd.DataFrame containing the dummies from the training data,
+            or None; the dataframe allows us to match new data to existing data 
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
@@ -303,6 +310,8 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
         transcripts: a list of strings of shape (n_samples,) containing the
             transcript of sample padded_samples[i].
         label_encoder: a sklearn.preprocessing.LabelEncoder for the transcripts
+        dummy_train: a pd.DataFrame containing the dummies from the training data;
+            matches the incoming dummy_train unless incoming dummy_train was None
     """
     samples = []
     original_transcripts = []
@@ -312,6 +321,19 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
     try:
         with open(meta_info_path, "rb") as f:
             meta = pickle.load(f)
+            meta["speakerSess"] =  meta["speakerId"] + "_" + meta["sessionId"]
+            
+            # If we want dummies, create/store the dummies as needed
+            if dummies is not None:
+                # Create them
+                meta_dummies = pd.get_dummies(meta[dummies])
+                if dummy_train is None:
+                    # Store it for future
+                    dummy_train = meta_dummies
+                else:
+                    # Reindex to match the training data, filling blanks with zeros
+                    meta_dummies = meta_dummies.reindex(columns = dummy_train.columns, fill_value=0)
+                meta_dummies = meta_dummies.as_matrix()
     except FileNotFoundError:
         print("Cannot open file %s -- check that directory to see if it needs to be renamed to the hardcoded path" % os.path.join(directory, "utteranceInfo.pkl"))
     
@@ -337,10 +359,18 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
         le.fit(list(chain.from_iterable(list(x) for x in original_transcripts)))
     transcripts = []
     for text in original_transcripts:
-        transcripts.append(le.transform(list(text)))
+        transcripts.append(le.transform([c for c in list(text) if c in le.classes_]))
         
     # Get lengths
-    sample_lens = np.array([s.shape[1] for s in samples], dtype=np.int64)
+    sample_lens = []
+    for i, s in enumerate(samples):
+        sample_lens.append(s.shape[1])
+        if dummies is not None:
+            print(meta_dummies[i])
+            dummies_through_time = np.ones((meta_dummies[i].shape[0], s.shape[1]))
+            dummies_through_time *= meta_dummies[i][:,np.newaxis]
+            s = np.vstack([s, dummies_through_time])
+    sample_lens = np.array(sample_lens, dtype=np.int64)
 
     n_samples = len(samples)
     n_feats = samples[0].shape[0]
@@ -354,12 +384,12 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
 
     # Ensure samples are shaped (n_samples, max_timesteps, n_features)
     padded_samples = np.transpose(padded_samples, (0, 2, 1))
-    return padded_samples, sample_lens, np.array(transcripts), le
+    return padded_samples, sample_lens, np.array(transcripts), le, dummy_train
 
 if __name__ == "__main__":
     """
     To test, run from root directory: python3 code/utils/preprocess.py
     """
-    samples, lens, transcripts = extract_all_features("sample-data/train/", "wand")
-    samples, lens, transcripts = extract_all_features("sample-data/train/", "spectrogram")
-    samples, lens, transcripts = extract_all_features("sample-data/train/", "wand_lda")
+    samples, lens, transcripts, _, _ = extract_all_features("sample-data/train/", "wand")
+    samples, lens, transcripts, _, _ = extract_all_features("sample-data/train/", "spectrogram")
+    samples, lens, transcripts, _, _ = extract_all_features("sample-data/train/", "wand_lda")

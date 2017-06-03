@@ -31,7 +31,12 @@ class Config(object):
     # What type of features to extract from the data
     # Valid feature_types: "wand_lda", "wand", "spectrogram"
     feature_type = "wand_lda"
-       
+    
+    # What additional dummies to include:
+    # None (no dummies), or a list with any of: 
+    # ["speakerId", "speakerSess", "gender", "mode"]
+    dummies = ["speakerId", "speakerSess", "gender", "mode"]
+    
     ##########################
     # Model architecture
     ##########################
