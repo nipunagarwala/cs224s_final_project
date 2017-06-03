@@ -433,13 +433,15 @@ def main(args):
             raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
             
         # Retrieve dummy_train
-        dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
-        if dummy_fn and os.path.isfile(dummy_fn):
-            with open(dummy_fn, "rb") as f:
-                dummy_train = pickle.load(f)
-            print("Dummy values from training restored")
-        else:
-            raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
+        dummy_train = None
+        if dummies is not None:
+            dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
+            if dummy_fn and os.path.isfile(dummy_fn):
+                with open(dummy_fn, "rb") as f:
+                    dummy_train = pickle.load(f)
+                print("Dummy values from training restored")
+            else:
+                raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
             
         # Prep data
         data, lens, transcripts, _, _ = prep_data(args, 
