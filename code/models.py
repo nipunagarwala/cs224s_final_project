@@ -459,13 +459,3 @@ class MultiModalEmgNN(object):
                                                 self.silent_decoded_probs], 
                                                 feed_dict)
         return batch_cost, wer, summary, beam_decoded, beam_probs
-
-
-
-        
-
-
-
-
-
-
