@@ -340,19 +340,25 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data, feature_type, mode, label_encoder=None):
+def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummies=None, dummy_train=None):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder)
+    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train)
     if label_encoder is None:
-        samples, sample_lens, transcripts, label_encoder = feat_info
+        if dummy_train is not None:
+            raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
+        samples, sample_lens, transcripts, label_encoder, dummy_train = feat_info
         # Store label_encoder to disk
         label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
         with open(label_fn, "wb") as f:
             pickle.dump(label_encoder, f)
-        print("Labels stored")
+        # Store dummy_train to disk
+        dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
+        with open(dummy_fn, "wb") as f:
+            pickle.dump(dummy_train, f)
+        print("Labels (label_encoder and dummy_train) stored")
     else:
-        samples, sample_lens, transcripts, _ = feat_info
+        samples, sample_lens, transcripts, _, _ = feat_info
     
     # Verify to user load succeeded
     print("------")
@@ -365,7 +371,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None):
     print(transcripts[0])
     print(label_encoder.inverse_transform(transcripts[0]))
     
-    return samples, sample_lens, transcripts, label_encoder
+    return samples, sample_lens, transcripts, label_encoder, dummy_train
   
 def main(args):
     # TODO make the storing of config files with the more natural -- 
@@ -378,11 +384,11 @@ def main(args):
     
     if args.phase == 'train':
         # Get the training data
-        data_tr, lens_tr, transcripts_tr, le = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, None)
+        data_tr, lens_tr, transcripts_tr, le, dummy_train = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None)
         # Get the dev data using the same label_encoder
-        data_de, lens_de, transcripts_de, _ = prep_data(args, 
-                    Config.dev_path, Config.feature_type, Config.mode, le)
+        data_de, lens_de, transcripts_de, _, _ = prep_data(args, 
+                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train)
         # Run model training         
         train_model(args, data_tr, lens_tr, transcripts_tr, le,
                           data_de, lens_de, transcripts_de)
@@ -399,9 +405,19 @@ def main(args):
         else:
             raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
             
+        # Retrieve dummy_train
+        dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
+        if dummy_fn and os.path.isfile(dummy_fn):
+            with open(dummy_fn, "rb") as f:
+                dummy_train = pickle.load(f)
+            print("Dummy values from training restored")
+        else:
+            raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
+            
         # Prep data
-        data, lens, transcripts, _ = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, label_encoder)
+        data, lens, transcripts, _, _ = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, label_encoder, 
+                    Config.dummies, dummy_train)
         # Run the model test           
         test_model(args, data, lens, transcripts, label_encoder)
     
