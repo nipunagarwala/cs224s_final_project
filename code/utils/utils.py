@@ -2,7 +2,25 @@ import numpy as np
 import sys
 import os
 import glob
+import editdistance
 
+def compute_wer(true_transcripts, decoded_transcripts):
+    """
+    Inputs:
+        true_transcripts: a list of utterance strings
+        decoded_transcripts: a second list of utterance strings
+
+    Returns:
+        Average WER per utterance, where tokens are split by whitespace.
+    """
+    wers = []
+    for target, decoded in zip(true_transcripts, decoded_transcripts):
+        target_words = target.split()
+        decoded_words = decoded.split()
+        distance = editdistance.eval(target_words, decoded_words)
+        wer = distance / len(target_words)
+        wers.append(wer)
+    return np.mean(wers)
 
 def make_batch(array, n_batches, batch_size):
     return np.stack([array[i*batch_size:i*batch_size+batch_size] for i in range(n_batches)])

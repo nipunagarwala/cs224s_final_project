@@ -18,9 +18,9 @@ import tensorflow as tf
 from time import gmtime, strftime
 
 from code.config import Config
-from code.models import SimpleEmgNN
+from code.models import SimpleEmgNN, MultiModalEmgNN
 from code.utils.preprocess import extract_all_features
-from code.utils.utils import make_batches
+from code.utils.utils import make_batches, compute_wer
 
 
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -43,6 +43,23 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 # A copy of config.py as well as labels.pkl is included in 
 # the Config.checkpoint_dir for posterity 
 
+def generate_all_str(sparse_matrix, label_encoder):
+    """
+    Given a sparse matrix in Tensorflow's format representing a decoded
+    batch from beam search, return the string representation of all
+    decodings in the batch.
+    """
+    indices, values, shape = sparse_matrix
+    results = ["" for _ in range(shape[0])]
+
+    characters = label_encoder.inverse_transform(values)
+
+    # Assumes values are ordered in row-major order.
+    for (example, timestep), character in zip(indices, characters):
+        results[example] += character
+
+    return results
+
 def generate_str_example(sparse_matrix, example_to_print, label_encoder):
     """
     Given a sparse matrix in Tensorflow's format, and 
@@ -54,6 +71,7 @@ def generate_str_example(sparse_matrix, example_to_print, label_encoder):
     # "where row == example_to_print" clauses.
     indices, values, shape = sparse_matrix
     result_str = ""
+
     for (example, timestep), val in zip(indices, values):
         if example == example_to_print:
             result_str += label_encoder.inverse_transform(val)
@@ -130,6 +148,7 @@ def create_model(session, restore, num_features, alphabet_size):
     """
     print("Creating model")
     model = SimpleEmgNN(Config, num_features, alphabet_size)
+    # model = MultiModalEmgNN(Config, Config, Config, Config, num_features, alphabet_size)
     
     ckpt = tf.train.get_checkpoint_state(Config.checkpoint_dir)
     if restore:
@@ -256,7 +275,15 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                                                     dev_beam_decoded,
                                                     dev_beam_probs,
                                                     label_encoder)
-                                                    
+                                             
+                        print("Computing WER for batch")
+                        true_transcripts = generate_all_str(batched_transcripts_dev[dev_iter], label_encoder)
+                        decoded_transcripts = generate_all_str(dev_beam_decoded[0], label_encoder)
+                        dev_wer = compute_wer(true_transcripts, decoded_transcripts)
+                        print("Word WER of batch =", dev_wer)
+                        dev_wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=dev_wer)])
+                        dev_writer.add_summary(dev_wer_summary, global_step)
+
                         # Tensorboard -- dev results
                         dev_writer.add_summary(dev_summary, global_step)
                         dev_writer.flush()

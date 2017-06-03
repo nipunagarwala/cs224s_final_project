@@ -69,5 +69,8 @@ class Config(object):
     # maximum norm globally is scaled to this value
     max_norm = 10 
     
-    # Number of predictions to generate
-    beam_size = 10
+    # Beam search: number of predictions to generate
+    top_paths = 5
+
+    # Beam search: beam width
+    beam_width = 100
