@@ -20,7 +20,7 @@ from time import gmtime, strftime
 from code.config import Config
 from code.models import SimpleEmgNN, MultiModalEmgNN
 from code.utils.preprocess import extract_all_features
-from code.utils.utils import make_batches, compute_wer
+from code.utils.utils import make_batches, compute_wer, compute_cer
 from code.utils.spell import correction
 
 
@@ -319,8 +319,15 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
             
             test_start = time.time()
             test_loss_avg = 0
-            test_cer_avg = 0
-            test_wer_avg = 0
+
+            # Before language-model beam-search autocorrect
+            cer_avg = 0
+            wer_avg = 0
+
+            # After language-model beam-search autocorrect
+            cer_corrected_avg = 0
+            wer_corrected_avg = 0
+
             for cur_batch_iter in range(len(batched_samples)):
                 # Do test step
                 batch_cost, cer, summary, beam_decoded, beam_probs = model.test_one_batch(
@@ -330,34 +337,37 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                                                 batched_sample_lens[cur_batch_iter])
                 global_step = model.global_step.eval()
 
-                # Show information to user
-                test_loss_avg += (batch_cost - test_loss_avg)/(cur_batch_iter+1)
-                test_cer_avg += (cer - test_cer_avg)/(cur_batch_iter+1)
                 # Watch performance
                 num_examples_in_batch = beam_probs.shape[0]
-                for example_id in range(num_examples_in_batch):
-                    # TODO dump the test results to a file rather than to screen
-                    print_details_on_example(example_id, "test", batched_samples[cur_batch_iter],
-                                                        batched_sample_lens[cur_batch_iter],
-                                                        batched_transcripts[cur_batch_iter],
-                                                        beam_decoded,
-                                                        beam_probs,
-                                                        label_encoder,
-                                                        limit_beam_to=1)
                 true_transcripts = generate_all_str(batched_transcripts[cur_batch_iter], label_encoder)
                 decoded_transcripts = generate_all_str(beam_decoded[0], label_encoder)
-                if args.autocorrect:
-                    decoded_transcripts = [correction(transcript) for transcript in decoded_transcripts]
+                decoded_transcripts_corrected = [correction(transcript) for transcript in decoded_transcripts]
+                
+                # Print decodings
+                for true, decoded, corrected in zip(true_transcripts, decoded_transcripts, decoded_transcripts_corrected):
+                    print(true, "->", decoded, "->", corrected)
+
+                # Compute metrics
+                cer = compute_cer(true_transcripts, decoded_transcripts)
                 wer = compute_wer(true_transcripts, decoded_transcripts)
-                test_wer_avg += (wer - test_wer_avg)/(cur_batch_iter+1)
+                cer_corrected = compute_cer(true_transcripts, decoded_transcripts_corrected)
+                wer_corrected = compute_wer(true_transcripts, decoded_transcripts_corrected)
+
+                # Update averages
+                cer_avg += (cer - cer_avg)/(cur_batch_iter+1)
+                wer_avg += (wer - wer_avg)/(cur_batch_iter+1)
+                cer_corrected_avg += (cer_corrected - cer_corrected_avg)/(cur_batch_iter+1)
+                wer_corrected_avg += (wer_corrected - wer_corrected_avg)/(cur_batch_iter+1)
+                test_loss_avg += (batch_cost - test_loss_avg)/(cur_batch_iter+1)
+
                 # Write to Tensorboard
                 wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=wer)])
                 test_writer.add_summary(wer_summary, global_step)
                 test_writer.add_summary(summary, global_step)
                 test_writer.flush()
                 
-            log = "Test_cost = {:.3f}, test_cer = {:.3f}, test_wer = {:.3f}, time = {:.3f}"
-            print(log.format(test_loss_avg, test_cer_avg, test_wer_avg, 
+            log = "Test set report: Cost = {:.3f}, CER = {:.3f}, WER = {:.3f}, CER (after autocorrect): {:.3f}, WER (after autocorrect): {:.3f}, time = {:.3f}"
+            print(log.format(test_loss_avg, cer_avg, wer_avg, cer_corrected_avg, wer_corrected_avg,
                              time.time() - test_start))
 
 
@@ -374,8 +384,6 @@ def parse_commandline():
     parser = argparse.ArgumentParser()
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
     parser.add_argument('--restore', nargs='?', default=False, type=bool, help="Whether to restore from checkpoint directory specified in Config (default is false; overriden to be True whenever phase is test)")
-    parser.add_argument('--autocorrect', action='store_true')
-    parser.set_defaults(autocorrect=False)
     args = parser.parse_args()
     return args
 
