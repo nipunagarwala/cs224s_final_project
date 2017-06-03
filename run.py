@@ -21,6 +21,7 @@ from code.config import Config
 from code.models import SimpleEmgNN, MultiModalEmgNN
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches, compute_wer
+from code.utils.spell import correction
 
 
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -318,10 +319,11 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
             
             test_start = time.time()
             test_loss_avg = 0
+            test_cer_avg = 0
             test_wer_avg = 0
             for cur_batch_iter in range(len(batched_samples)):
                 # Do test step
-                batch_cost, wer, summary, beam_decoded, beam_probs = model.test_one_batch(
+                batch_cost, cer, summary, beam_decoded, beam_probs = model.test_one_batch(
                                                 session, 
                                                 batched_samples[cur_batch_iter], 
                                                 batched_transcripts[cur_batch_iter], 
@@ -330,7 +332,7 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
 
                 # Show information to user
                 test_loss_avg += (batch_cost - test_loss_avg)/(cur_batch_iter+1)
-                test_wer_avg += (wer - test_wer_avg)/(cur_batch_iter+1)
+                test_cer_avg += (cer - test_cer_avg)/(cur_batch_iter+1)
                 # Watch performance
                 num_examples_in_batch = beam_probs.shape[0]
                 for example_id in range(num_examples_in_batch):
@@ -342,12 +344,20 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                                                         beam_probs,
                                                         label_encoder,
                                                         limit_beam_to=1)
+                true_transcripts = generate_all_str(batched_transcripts[cur_batch_iter], label_encoder)
+                decoded_transcripts = generate_all_str(beam_decoded[0], label_encoder)
+                if args.autocorrect:
+                    decoded_transcripts = [correction(transcript) for transcript in decoded_transcripts]
+                wer = compute_wer(true_transcripts, decoded_transcripts)
+                test_wer_avg += (wer - test_wer_avg)/(cur_batch_iter+1)
                 # Write to Tensorboard
+                wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=wer)])
+                test_writer.add_summary(wer_summary, global_step)
                 test_writer.add_summary(summary, global_step)
                 test_writer.flush()
                 
-            log = "Test_cost = {:.3f}, test_wer = {:.3f}, time = {:.3f}"
-            print(log.format(test_loss_avg, test_wer_avg, 
+            log = "Test_cost = {:.3f}, test_cer = {:.3f}, test_wer = {:.3f}, time = {:.3f}"
+            print(log.format(test_loss_avg, test_cer_avg, test_wer_avg, 
                              time.time() - test_start))
 
 
@@ -364,6 +374,8 @@ def parse_commandline():
     parser = argparse.ArgumentParser()
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
     parser.add_argument('--restore', nargs='?', default=False, type=bool, help="Whether to restore from checkpoint directory specified in Config (default is false; overriden to be True whenever phase is test)")
+    parser.add_argument('--autocorrect', action='store_true')
+    parser.set_defaults(autocorrect=False)
     args = parser.parse_args()
     return args
 
@@ -433,13 +445,15 @@ def main(args):
             raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
             
         # Retrieve dummy_train
-        dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
-        if dummy_fn and os.path.isfile(dummy_fn):
-            with open(dummy_fn, "rb") as f:
-                dummy_train = pickle.load(f)
-            print("Dummy values from training restored")
-        else:
-            raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
+        dummy_train = None
+        if Config.dummies is not None:
+            dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
+            if dummy_fn and os.path.isfile(dummy_fn):
+                with open(dummy_fn, "rb") as f:
+                    dummy_train = pickle.load(f)
+                print("Dummy values from training restored")
+            else:
+                raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
             
         # Prep data
         data, lens, transcripts, _, _ = prep_data(args, 

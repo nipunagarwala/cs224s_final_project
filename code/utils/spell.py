@@ -15,7 +15,7 @@ MODEL = None
 def get_model():
     global MODEL
     if MODEL is None:
-        MODEL = kenlm.Model('../../data/lm/lm.binary')
+        MODEL = kenlm.Model('data/lm/lm.binary')
     return MODEL
 
 def words(text):
@@ -23,7 +23,7 @@ def words(text):
     return text.split()#re.findall(r'\w+', text.lower())
 
 # Load known word set
-with open('../../data/lm/words.txt') as f:
+with open('data/lm/words.txt') as f:
     WORDS = set(words(f.read()))
 
 def log_probability(sentence):

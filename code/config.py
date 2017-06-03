@@ -35,7 +35,7 @@ class Config(object):
     # What additional dummies to include:
     # None (no dummies), or a list with any of: 
     # ["speakerId", "speakerSess", "gender", "mode"]
-    dummies = ["speakerId", "speakerSess", "gender", "mode"]
+    dummies = None#["speakerId", "speakerSess", "gender", "mode"]
     
     ##########################
     # Model architecture
