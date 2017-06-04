@@ -345,7 +345,10 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                 
                 # Print decodings
                 for true, decoded, corrected in zip(true_transcripts, decoded_transcripts, decoded_transcripts_corrected):
-                    print(true, "->", decoded, "->", corrected)
+                    print(true)
+                    print(decoded)
+                    print(corrected)
+                    print("")
 
                 # Compute metrics
                 cer = compute_cer(true_transcripts, decoded_transcripts)
@@ -365,7 +368,8 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                 test_writer.add_summary(wer_summary, global_step)
                 test_writer.add_summary(summary, global_step)
                 test_writer.flush()
-                
+
+            print("\n=================================\n")
             log = "Test set report: Cost = {:.3f}, CER = {:.3f}, WER = {:.3f}, CER (after autocorrect): {:.3f}, WER (after autocorrect): {:.3f}, time = {:.3f}"
             print(log.format(test_loss_avg, cer_avg, wer_avg, cer_corrected_avg, wer_corrected_avg,
                              time.time() - test_start))
