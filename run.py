@@ -153,10 +153,10 @@ def create_model(session, restore, num_features, alphabet_size):
     model = SimpleEmgNN(Config, num_features, alphabet_size)
     # model = MultiModalEmgNN(Config, Config, Config, Config, num_features, alphabet_size)
     
-    ckpt = tf.train.get_checkpoint_state(Config.checkpoint_dir)
+    ckpt = tf.train.latest_checkpoint(Config.checkpoint_dir)
     if restore:
-        if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
-            model.saver.restore(session, ckpt.model_checkpoint_path)
+        if ckpt:
+            model.saver.restore(session, ckpt)
             print("Model restored.")
         else:
             raise RuntimeError("Cannot restore from nonexistent checkpoint at %s" % ckpt.model_checkpoint_path)        
@@ -525,7 +525,7 @@ def main(args):
             
         # Prep data
         data, lens, transcripts, _, _, modes, sessions, _ = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, label_encoder, 
+                    Config.test_path, Config.feature_type, Config.mode, label_encoder, 
                     Config.dummies, dummy_train, Config.use_scaler, scaler)
         # Run the model test           
         test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
