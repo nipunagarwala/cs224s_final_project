@@ -22,6 +22,14 @@ def compute_wer(true_transcripts, decoded_transcripts):
         wers.append(wer)
     return np.mean(wers)
 
+def compute_cer(true_transcripts, decoded_transcripts):
+    cers = []
+    for target, decoded in zip(true_transcripts, decoded_transcripts):
+        distance = editdistance.eval(target, decoded)
+        cer = distance / len(target)
+        cers.append(cer)
+    return np.mean(cers)
+
 def make_batch(array, n_batches, batch_size):
     return np.stack([array[i*batch_size:i*batch_size+batch_size] for i in range(n_batches)])
 
