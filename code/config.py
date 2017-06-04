@@ -42,6 +42,9 @@ class Config(object):
     # ["speakerId", "speakerSess", "gender", "mode"]
     dummies = None#["speakerId", "speakerSess", "gender", "mode"]
     
+    # Whether to ensure features have zero-mean and unit variance
+    use_scaler = False
+    
     ##########################
     # Model architecture
     ##########################

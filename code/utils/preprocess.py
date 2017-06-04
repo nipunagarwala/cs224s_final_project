@@ -299,7 +299,8 @@ def extract_features(pkl_filename, feature_type):
         raise RuntimeError("Invalid feature type specified")
 
 def extract_all_features(directory, feature_type, session_type=None, 
-    le=None, dummies=None, dummy_train=None, scaler=None):
+    le=None, dummies=None, dummy_train=None, 
+    use_scaler=True, scaler=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -317,6 +318,7 @@ def extract_all_features(directory, feature_type, session_type=None,
             (e.g., dummies=["speakerId", "speakerSess", "gender", "mode"] )
         dummy_train: a pd.DataFrame containing the dummies from the training data,
             or None; the dataframe allows us to match new data to existing data 
+        use_scaler: boolean indicating whether to use the scaler
         scaler: sklearn.preprocessing.StandardScaler object to use for transform,
             or None if a new transformer should be learned, or "ignore" if ignored
 
@@ -412,7 +414,7 @@ def extract_all_features(directory, feature_type, session_type=None,
     padded_samples = np.transpose(padded_samples, (0, 2, 1))
     n_signals, max_timesteps, n_feats = padded_samples.shape
     
-    if scaler is not "ignore":
+    if use_scaler:
         if scaler is None:
             scaler = preprocessing.StandardScaler()
             padded_samples = np.reshape(padded_samples, (-1, n_feats))
