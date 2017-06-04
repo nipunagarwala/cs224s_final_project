@@ -333,6 +333,8 @@ def extract_all_features(directory, feature_type, session_type=None,
     original_transcripts = []
     phone_labels = []
     is_audible_sample = []
+    modes = []
+    sessions = []
 
     meta_info_path = os.path.join(directory, "utteranceInfo.pkl")
     try:
@@ -353,13 +355,15 @@ def extract_all_features(directory, feature_type, session_type=None,
                 meta_dummies = meta_dummies.as_matrix()
     except FileNotFoundError:
         print("Cannot open file %s -- check that directory to see if it needs to be renamed to the hardcoded path" % os.path.join(directory, "utteranceInfo.pkl"))
-    
+
     for i, utterance in meta.iterrows():
         if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
         features, phones = extract_features(pkl_filename, feature_type)
         samples.append(features)
+        modes.append(utterance["mode"])
+        sessions.append(utterance["speakerSess"])
         original_transcripts.append(utterance["transcript"])
         phone_labels.append(phones)
         is_audible_sample.append(utterance["mode"] == "audible")
@@ -403,7 +407,7 @@ def extract_all_features(directory, feature_type, session_type=None,
 
     # Ensure samples are shaped (n_samples, max_timesteps, n_features)
     padded_samples = np.transpose(padded_samples, (0, 2, 1))
-    return padded_samples, sample_lens, np.array(transcripts), le, dummy_train
+    return padded_samples, sample_lens, np.array(transcripts), le, dummy_train, np.array(modes), np.array(sessions)
 
 if __name__ == "__main__":
     """

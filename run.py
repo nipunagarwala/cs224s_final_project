@@ -12,6 +12,7 @@ import pickle
 import shutil
 import autocorrect
 import scipy
+from collections import defaultdict
 
 import numpy as np 
 import tensorflow as tf
@@ -302,7 +303,7 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                                                 global_step=model.global_step)
 
 
-def test_model(args, samples, sample_lens, transcripts, label_encoder):
+def test_model(args, samples, sample_lens, transcripts, modes, sessions, label_encoder):
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
@@ -315,7 +316,8 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
             test_writer = tf.summary.FileWriter(logs_path, session.graph)
 
             # Create dataset
-            batched_samples, batched_transcripts, batched_sample_lens = make_batches(samples, sample_lens, transcripts, Config.batch_size)
+            batches = make_batches(samples, sample_lens, transcripts, Config.batch_size, modes=modes, sessions=sessions)
+            batched_samples, batched_transcripts, batched_sample_lens, batched_modes, batched_sessions = batches
             
             test_start = time.time()
             test_loss_avg = 0
@@ -323,6 +325,10 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
             # Before language-model beam-search autocorrect
             cer_avg = 0
             wer_avg = 0
+            session_cers = defaultdict(list)
+            mode_cers = defaultdict(list)
+            session_wers = defaultdict(list)
+            mode_wers = defaultdict(list)
 
             # After language-model beam-search autocorrect
             cer_corrected_avg = 0
@@ -357,23 +363,48 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                 wer_corrected = compute_wer(true_transcripts, decoded_transcripts_corrected)
 
                 # Update averages
-                cer_avg += (cer - cer_avg)/(cur_batch_iter+1)
-                wer_avg += (wer - wer_avg)/(cur_batch_iter+1)
-                cer_corrected_avg += (cer_corrected - cer_corrected_avg)/(cur_batch_iter+1)
-                wer_corrected_avg += (wer_corrected - wer_corrected_avg)/(cur_batch_iter+1)
+                for i, (c, w) in enumerate(zip(cer_corrected, wer_corrected)):
+                    session_cers[batched_sessions[cur_batch_iter][i]].append(c)
+                    session_wers[batched_sessions[cur_batch_iter][i]].append(w)
+                    mode_cers[batched_modes[cur_batch_iter][i]].append(c)
+                    mode_wers[batched_modes[cur_batch_iter][i]].append(w)
+                cer_avg += (np.mean(cer) - cer_avg)/(cur_batch_iter+1)
+                wer_avg += (np.mean(wer) - wer_avg)/(cur_batch_iter+1)
+                cer_corrected_avg += (np.mean(cer_corrected) - cer_corrected_avg)/(cur_batch_iter+1)
+                wer_corrected_avg += (np.mean(wer_corrected) - wer_corrected_avg)/(cur_batch_iter+1)
                 test_loss_avg += (batch_cost - test_loss_avg)/(cur_batch_iter+1)
 
                 # Write to Tensorboard
-                wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=wer)])
+                wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=np.mean(wer))])
                 test_writer.add_summary(wer_summary, global_step)
                 test_writer.add_summary(summary, global_step)
                 test_writer.flush()
 
-            print("\n=================================\n")
-            log = "Test set report: Cost = {:.3f}, CER = {:.3f}, WER = {:.3f}, CER (after autocorrect): {:.3f}, WER (after autocorrect): {:.3f}, time = {:.3f}"
-            print(log.format(test_loss_avg, cer_avg, wer_avg, cer_corrected_avg, wer_corrected_avg,
-                             time.time() - test_start))
+            print("\n=========== TEST SET REPORT =============\n")
+            print("Time:", time.time() - test_start)
+            print("")
+            log = "Averages per utterance:\n    Cost: {:.3f}\n    CER: {:.3f}\n    WER: {:.3f}\n    CER (after autocorrect): {:.3f}\n    WER (after autocorrect): {:.3f}\n"
+            print(log.format(test_loss_avg, cer_avg, wer_avg, cer_corrected_avg, wer_corrected_avg))
+            print("Average utterance CER by session, after autocorrect:")
+            print_dict(session_cers)
+            print("")
+            print("Average utterance WER by session, after autocorrect:")
+            print_dict(session_wers)
+            print("")
+            print("Average CER per session, after autocorrect:", np.mean([np.mean(cs) for cs in session_cers.values()]))
+            print("Average WER per session, after autocorrect:", np.mean([np.mean(ws) for ws in session_wers.values()]))
+            print("")
+            print("Average utterance CER by mode, after autocorrect:")
+            print_dict(mode_cers)
+            print("")
+            print("Average utterance WER by mode, after autocorrect:")
+            print_dict(mode_wers)
+            print("")
 
+def print_dict(d):
+    for key in d:
+        log = "    " + key + " : {:.3f}"
+        print(log.format(np.mean(d[key])))
 
 def parse_commandline():
     """
@@ -398,7 +429,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
     if label_encoder is None:
         if dummy_train is not None:
             raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
-        samples, sample_lens, transcripts, label_encoder, dummy_train = feat_info
+        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions = feat_info
         # Store label_encoder to disk
         label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
         with open(label_fn, "wb") as f:
@@ -409,7 +440,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
             pickle.dump(dummy_train, f)
         print("Labels (label_encoder and dummy_train) stored")
     else:
-        samples, sample_lens, transcripts, _, _ = feat_info
+        samples, sample_lens, transcripts, _, _, modes, sessions = feat_info
     
     # Verify to user load succeeded
     print("------")
@@ -422,7 +453,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
     print(transcripts[0])
     print(label_encoder.inverse_transform(transcripts[0]))
     
-    return samples, sample_lens, transcripts, label_encoder, dummy_train
+    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions
   
 def main(args):
     # TODO make the storing of config files with the more natural -- 
@@ -435,10 +466,10 @@ def main(args):
     
     if args.phase == 'train':
         # Get the training data
-        data_tr, lens_tr, transcripts_tr, le, dummy_train = prep_data(args, 
+        data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _ = prep_data(args, 
                     Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None)
         # Get the dev data using the same label_encoder
-        data_de, lens_de, transcripts_de, _, _ = prep_data(args, 
+        data_de, lens_de, transcripts_de, _, _ , _, _= prep_data(args, 
                     Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train)
         # Run model training         
         train_model(args, data_tr, lens_tr, transcripts_tr, le,
@@ -468,11 +499,11 @@ def main(args):
                 raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
             
         # Prep data
-        data, lens, transcripts, _, _ = prep_data(args, 
+        data, lens, transcripts, _, _, modes, sessions = prep_data(args, 
                     Config.train_path, Config.feature_type, Config.mode, label_encoder, 
                     Config.dummies, dummy_train)
         # Run the model test           
-        test_model(args, data, lens, transcripts, label_encoder)
+        test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
     
     else:
         raise RuntimeError("Phase '%s' is unknown" % args.phase)
