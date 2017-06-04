@@ -233,7 +233,7 @@ def transform(samples, lda):
 
     return samples
 
-def wand_lda(samples, phone_labels, n_components=12):
+def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
     """
     Fits the n_components most discriminant features in the samples with respect 
     to the triphone labels, and transforms the samples accordingly. samples
@@ -242,6 +242,10 @@ def wand_lda(samples, phone_labels, n_components=12):
     Inputs:
         samples: a list of n_sample tensors, each of shape (n_feats, n_timesteps)
         phone_labels: a list of n_sample lists, each of length n_timesteps
+        n_components: number of output components
+        subset_to_use: a list of n_sample booleans, each one indicating whether
+            to use the corresponding sample and phone_labels in fitting the LDA,
+            or None if all should be used
 
         NOTE: n_timesteps can be different per sample!
 
@@ -249,17 +253,29 @@ def wand_lda(samples, phone_labels, n_components=12):
         samples: a list of n_sample np.ndarrays, each of shape
             (n_components, n_timesteps)
     """
+    if subset_to_use is None:
+        tr_samples = samples
+        tr_phone_labels = phone_labels
+    else:
+        tr_samples, tr_phone_labels = [], []
+        for i in range(len(samples)):
+            if subset_to_use[i]:
+                tr_samples.append(samples[i])
+                tr_phone_labels.append(phone_labels[i])
+    
+    if len(tr_samples) == 0:
+        raise ValueError("Cannot perform LDA on no input data!")
+    
+    n_feats = tr_samples[0].shape[0]
+    total_timesteps = sum(s.shape[1] for s in tr_samples)
 
-    n_feats = samples[0].shape[0]
-    total_timesteps = sum(s.shape[1] for s in samples)
-
-    phone_lookup = labels_to_int_lookup(phone_labels)
+    phone_lookup = labels_to_int_lookup(tr_phone_labels)
 
     X = np.zeros((total_timesteps, n_feats))
     y = np.zeros(total_timesteps, dtype=np.int32)
 
     cur_timestep = 0
-    for s, (feats, labels) in enumerate(zip(samples, phone_labels)):
+    for s, (feats, labels) in enumerate(zip(tr_samples, tr_phone_labels)):
         for t in range(len(labels)):
             X[cur_timestep, :] = feats[:,t]
             y[cur_timestep] = phone_lookup[labels[t]]
@@ -275,7 +291,7 @@ def extract_features(pkl_filename, feature_type):
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
 
-    if feature_type == "wand" or feature_type == "wand_lda":
+    if feature_type == "wand" or feature_type == "wand_lda" or feature_type == "wand_ldaa":
         return wand_features(emg)
     elif feature_type == "spectrogram":
         return spectrogram_features(emg)
@@ -291,7 +307,7 @@ def extract_all_features(directory, feature_type, session_type=None,
     Inputs:
         directory: a directory containing utteranceInfo.pkl and the pkl files
             for all utterances specified in utteranceInfo.pkl.
-        feature_type: either "wand", "wand_lda", or "spectrogram".
+        feature_type: either "wand", "wand_lda", "wand_ldaa", or "spectrogram".
         session_type: None, "audible", "whispered", or "silent". if None, 
             extracts features for all sessions.
         le: an existing label encoder; can be None if a new label_encoder
@@ -316,6 +332,7 @@ def extract_all_features(directory, feature_type, session_type=None,
     samples = []
     original_transcripts = []
     phone_labels = []
+    is_audible_sample = []
 
     meta_info_path = os.path.join(directory, "utteranceInfo.pkl")
     try:
@@ -345,6 +362,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         samples.append(features)
         original_transcripts.append(utterance["transcript"])
         phone_labels.append(phones)
+        is_audible_sample.append(utterance["mode"] == "audible")
         
     if len(samples) == 0:
         raise ValueError("Dataset %s has no entries when filtered for '%s' " % 
@@ -352,6 +370,8 @@ def extract_all_features(directory, feature_type, session_type=None,
         
     if feature_type == "wand_lda":
         samples = wand_lda(samples, phone_labels)
+    elif feature_type == "wand_ldaa":
+        samples = wand_lda(samples, phone_labels, subset_to_use=is_audible_sample)
 
     # Build the encodings
     if le is None:
@@ -366,7 +386,6 @@ def extract_all_features(directory, feature_type, session_type=None,
     for i, s in enumerate(samples):
         sample_lens.append(s.shape[1])
         if dummies is not None:
-            print(meta_dummies[i])
             dummies_through_time = np.ones((meta_dummies[i].shape[0], s.shape[1]))
             dummies_through_time *= meta_dummies[i][:,np.newaxis]
             s = np.vstack([s, dummies_through_time])
