@@ -180,8 +180,10 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
             
             # Create a tensorboard writer for this session
             start_time = strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-            logs_path_train = os.path.join(Config.tensorboard_dir, start_time , "train")
-            logs_path_dev = os.path.join(Config.tensorboard_dir, start_time , "dev")
+            logs_path_train = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix, 
+                    start_time , "train")
+            logs_path_dev = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix,
+                    start_time , "dev")
             train_writer = tf.summary.FileWriter(logs_path_train, session.graph)
             dev_writer = tf.summary.FileWriter(logs_path_dev, session.graph)
             
@@ -312,7 +314,7 @@ def test_model(args, samples, sample_lens, transcripts, modes, sessions, label_e
                         samples.shape[-1], len(label_encoder.classes_)+1)
 
             # Create a tensorboard writer for this session
-            logs_path = os.path.join(Config.tensorboard_dir, 
+            logs_path = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix, 
                              strftime("%Y_%m_%d_%H_%M_%S", gmtime()), "val")
             test_writer = tf.summary.FileWriter(logs_path, session.graph)
 

@@ -6,6 +6,7 @@ class Config(object):
     ##########################
     checkpoint_dir = "checkpoints"
     tensorboard_dir = "tensorboard"
+    tensorboard_prefix = "my_run"
     steps_per_checkpoint = 25
     freq_of_longterm_checkpoint = 0.5     # in hours
     
