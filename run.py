@@ -12,6 +12,7 @@ import pickle
 import shutil
 import autocorrect
 import scipy
+import warnings
 from collections import defaultdict
 
 import numpy as np 
@@ -179,8 +180,10 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
             
             # Create a tensorboard writer for this session
             start_time = strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-            logs_path_train = os.path.join(Config.tensorboard_dir, start_time , "train")
-            logs_path_dev = os.path.join(Config.tensorboard_dir, start_time , "dev")
+            logs_path_train = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix, 
+                    start_time , "train")
+            logs_path_dev = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix,
+                    start_time , "dev")
             train_writer = tf.summary.FileWriter(logs_path_train, session.graph)
             dev_writer = tf.summary.FileWriter(logs_path_dev, session.graph)
             
@@ -281,7 +284,7 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                         print("Computing WER for batch")
                         true_transcripts = generate_all_str(batched_transcripts_dev[dev_iter], label_encoder)
                         decoded_transcripts = generate_all_str(dev_beam_decoded[0], label_encoder)
-                        dev_wer = compute_wer(true_transcripts, decoded_transcripts)
+                        dev_wer = np.mean(compute_wer(true_transcripts, decoded_transcripts))
                         print("Word-level WER of batch =", dev_wer)
                         dev_wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=dev_wer)])
                         dev_writer.add_summary(dev_wer_summary, global_step)
@@ -311,7 +314,7 @@ def test_model(args, samples, sample_lens, transcripts, modes, sessions, label_e
                         samples.shape[-1], len(label_encoder.classes_)+1)
 
             # Create a tensorboard writer for this session
-            logs_path = os.path.join(Config.tensorboard_dir, 
+            logs_path = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix, 
                              strftime("%Y_%m_%d_%H_%M_%S", gmtime()), "val")
             test_writer = tf.summary.FileWriter(logs_path, session.graph)
 
@@ -422,14 +425,16 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummies=None, dummy_train=None):
+def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummies=None, dummy_train=None, scaler=None):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train)
+    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, scaler)
     if label_encoder is None:
         if dummy_train is not None:
             raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
-        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions = feat_info
+        if scaler is not None:
+            raise ValueError("When label encoder is None, that means we're training -- so scaler should be None too. But it isn't.")
+        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler = feat_info
         # Store label_encoder to disk
         label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
         with open(label_fn, "wb") as f:
@@ -439,8 +444,13 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
         with open(dummy_fn, "wb") as f:
             pickle.dump(dummy_train, f)
         print("Labels (label_encoder and dummy_train) stored")
+        # Store scaler
+        scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
+        with open(scaler_fn, "wb") as f:
+            pickle.dump(scaler, f)
+        print("Scaler stored")
     else:
-        samples, sample_lens, transcripts, _, _, modes, sessions = feat_info
+        samples, sample_lens, transcripts, _, _, modes, sessions, scaler = feat_info
     
     # Verify to user load succeeded
     print("------")
@@ -453,7 +463,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
     print(transcripts[0])
     print(label_encoder.inverse_transform(transcripts[0]))
     
-    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions
+    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler
   
 def main(args):
     # TODO make the storing of config files with the more natural -- 
@@ -466,11 +476,11 @@ def main(args):
     
     if args.phase == 'train':
         # Get the training data
-        data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _ = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None)
+        data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _, scaler = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, None)
         # Get the dev data using the same label_encoder
-        data_de, lens_de, transcripts_de, _, _ , _, _= prep_data(args, 
-                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train)
+        data_de, lens_de, transcripts_de, _, _ , _, _, _ = prep_data(args, 
+                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train, scaler)
         # Run model training         
         train_model(args, data_tr, lens_tr, transcripts_tr, le,
                           data_de, lens_de, transcripts_de)
@@ -497,11 +507,21 @@ def main(args):
                 print("Dummy values from training restored")
             else:
                 raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
+                
+        # Retrieve scaler
+        scaler = "ignore"
+        scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
+        if scaler_fn and os.path.isfile(scaler_fn):
+            with open(scaler_fn, "rb") as f:
+                scaler = pickle.load(f)
+            print("Scaler restored")
+        else:
+            warnings.warn("No scaler for this run!  No units have been normalized as per training data.")
             
         # Prep data
-        data, lens, transcripts, _, _, modes, sessions = prep_data(args, 
+        data, lens, transcripts, _, _, modes, sessions, _ = prep_data(args, 
                     Config.train_path, Config.feature_type, Config.mode, label_encoder, 
-                    Config.dummies, dummy_train)
+                    Config.dummies, dummy_train, scaler)
         # Run the model test           
         test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
     

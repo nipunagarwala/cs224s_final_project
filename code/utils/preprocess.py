@@ -299,7 +299,7 @@ def extract_features(pkl_filename, feature_type):
         raise RuntimeError("Invalid feature type specified")
 
 def extract_all_features(directory, feature_type, session_type=None, 
-    le=None, dummies=None, dummy_train=None):
+    le=None, dummies=None, dummy_train=None, scaler=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -317,6 +317,8 @@ def extract_all_features(directory, feature_type, session_type=None,
             (e.g., dummies=["speakerId", "speakerSess", "gender", "mode"] )
         dummy_train: a pd.DataFrame containing the dummies from the training data,
             or None; the dataframe allows us to match new data to existing data 
+        scaler: sklearn.preprocessing.StandardScaler object to use for transform,
+            or None if a new transformer should be learned, or "ignore" if ignored
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
@@ -328,6 +330,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         label_encoder: a sklearn.preprocessing.LabelEncoder for the transcripts
         dummy_train: a pd.DataFrame containing the dummies from the training data;
             matches the incoming dummy_train unless incoming dummy_train was None
+        scaler: a sklearn.preprocessing.StandardScaler object used for transform
     """
     samples = []
     original_transcripts = []
@@ -407,7 +410,20 @@ def extract_all_features(directory, feature_type, session_type=None,
 
     # Ensure samples are shaped (n_samples, max_timesteps, n_features)
     padded_samples = np.transpose(padded_samples, (0, 2, 1))
-    return padded_samples, sample_lens, np.array(transcripts), le, dummy_train, np.array(modes), np.array(sessions)
+    n_signals, max_timesteps, n_feats = padded_samples.shape
+    
+    if scaler is not "ignore":
+        if scaler is None:
+            scaler = preprocessing.StandardScaler()
+            padded_samples = np.reshape(padded_samples, (-1, n_feats))
+            scaler.fit(padded_samples)
+            padded_samples = np.reshape(padded_samples, (n_samples, max_timesteps, n_feats))
+        padded_samples = np.reshape(padded_samples, (-1, n_feats))
+        padded_samples = scaler.transform(padded_samples)
+        padded_samples = np.reshape(padded_samples, (n_samples, max_timesteps, n_feats))
+        
+    return (padded_samples, sample_lens, np.array(transcripts), le, 
+            dummy_train, np.array(modes), np.array(sessions), scaler)
 
 if __name__ == "__main__":
     """
