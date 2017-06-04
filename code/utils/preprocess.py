@@ -233,7 +233,7 @@ def transform(samples, lda):
 
     return samples
 
-def wand_lda(samples, phone_labels, n_components=32, subset_to_use=None):
+def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
     """
     Fits the n_components most discriminant features in the samples with respect 
     to the triphone labels, and transforms the samples accordingly. samples
