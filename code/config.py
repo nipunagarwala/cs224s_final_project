@@ -13,7 +13,7 @@ class Config(object):
     # Reporting configuration
     ##########################
     # Frequency with which to print quant & qual 
-    # monitoring information to stdout for user enjoyment
+    # monitoring information to stdout and tensorboard 
     steps_per_train_report = 1
     steps_per_dev_report = 10
     
@@ -29,7 +29,11 @@ class Config(object):
     mode = None
     
     # What type of features to extract from the data
-    # Valid feature_types: "wand_lda", "wand", "spectrogram"
+    # Valid feature_types: 
+    # - "wand": stacked time-domain features derived from DFT re: Wand papers
+    # - "wand_lda": wand limited to the 12-dim subspace that best represents all triphone labels
+    # - "wand_ldaa": wand limited to the 12-dim subspace that best represents *audible* triphone labels
+    # - "spectrogram": discrete Fourier transform of each frame
     feature_type = "wand_lda"
     
     # What additional dummies to include:
