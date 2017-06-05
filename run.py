@@ -12,6 +12,8 @@ import pickle
 import shutil
 import autocorrect
 import scipy
+import warnings
+from collections import defaultdict
 
 import numpy as np 
 import tensorflow as tf
@@ -20,7 +22,8 @@ from time import gmtime, strftime
 from code.config import Config
 from code.models import SimpleEmgNN, MultiModalEmgNN
 from code.utils.preprocess import extract_all_features
-from code.utils.utils import make_batches, compute_wer
+from code.utils.utils import make_batches, compute_wer, compute_cer
+from code.utils.spell import correction
 
 
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -150,10 +153,10 @@ def create_model(session, restore, num_features, alphabet_size):
     model = SimpleEmgNN(Config, num_features, alphabet_size)
     # model = MultiModalEmgNN(Config, Config, Config, Config, num_features, alphabet_size)
     
-    ckpt = tf.train.get_checkpoint_state(Config.checkpoint_dir)
+    ckpt = tf.train.latest_checkpoint(Config.checkpoint_dir)
     if restore:
-        if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
-            model.saver.restore(session, ckpt.model_checkpoint_path)
+        if ckpt:
+            model.saver.restore(session, ckpt)
             print("Model restored.")
         else:
             raise RuntimeError("Cannot restore from nonexistent checkpoint at %s" % ckpt.model_checkpoint_path)        
@@ -177,8 +180,10 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
             
             # Create a tensorboard writer for this session
             start_time = strftime("%Y_%m_%d_%H_%M_%S", gmtime())
-            logs_path_train = os.path.join(Config.tensorboard_dir, start_time , "train")
-            logs_path_dev = os.path.join(Config.tensorboard_dir, start_time , "dev")
+            logs_path_train = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix, 
+                    start_time , "train")
+            logs_path_dev = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix,
+                    start_time , "dev")
             train_writer = tf.summary.FileWriter(logs_path_train, session.graph)
             dev_writer = tf.summary.FileWriter(logs_path_dev, session.graph)
             
@@ -279,8 +284,8 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                         print("Computing WER for batch")
                         true_transcripts = generate_all_str(batched_transcripts_dev[dev_iter], label_encoder)
                         decoded_transcripts = generate_all_str(dev_beam_decoded[0], label_encoder)
-                        dev_wer = compute_wer(true_transcripts, decoded_transcripts)
-                        print("Word WER of batch =", dev_wer)
+                        dev_wer = np.mean(compute_wer(true_transcripts, decoded_transcripts))
+                        print("Word-level WER of batch =", dev_wer)
                         dev_wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=dev_wer)])
                         dev_writer.add_summary(dev_wer_summary, global_step)
 
@@ -301,7 +306,7 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                                                 global_step=model.global_step)
 
 
-def test_model(args, samples, sample_lens, transcripts, label_encoder):
+def test_model(args, samples, sample_lens, transcripts, modes, sessions, label_encoder):
     with tf.Graph().as_default():
         with tf.Session() as session:
             # Create or restore model
@@ -309,47 +314,100 @@ def test_model(args, samples, sample_lens, transcripts, label_encoder):
                         samples.shape[-1], len(label_encoder.classes_)+1)
 
             # Create a tensorboard writer for this session
-            logs_path = os.path.join(Config.tensorboard_dir, 
+            logs_path = os.path.join(Config.tensorboard_dir, Config.tensorboard_prefix, 
                              strftime("%Y_%m_%d_%H_%M_%S", gmtime()), "val")
             test_writer = tf.summary.FileWriter(logs_path, session.graph)
 
             # Create dataset
-            batched_samples, batched_transcripts, batched_sample_lens = make_batches(samples, sample_lens, transcripts, Config.batch_size)
+            batches = make_batches(samples, sample_lens, transcripts, Config.batch_size, modes=modes, sessions=sessions)
+            batched_samples, batched_transcripts, batched_sample_lens, batched_modes, batched_sessions = batches
             
             test_start = time.time()
             test_loss_avg = 0
-            test_wer_avg = 0
+
+            # Before language-model beam-search autocorrect
+            cer_avg = 0
+            wer_avg = 0
+            session_cers = defaultdict(list)
+            mode_cers = defaultdict(list)
+            session_wers = defaultdict(list)
+            mode_wers = defaultdict(list)
+
+            # After language-model beam-search autocorrect
+            cer_corrected_avg = 0
+            wer_corrected_avg = 0
+
             for cur_batch_iter in range(len(batched_samples)):
                 # Do test step
-                batch_cost, wer, summary, beam_decoded, beam_probs = model.test_one_batch(
+                batch_cost, cer, summary, beam_decoded, beam_probs = model.test_one_batch(
                                                 session, 
                                                 batched_samples[cur_batch_iter], 
                                                 batched_transcripts[cur_batch_iter], 
                                                 batched_sample_lens[cur_batch_iter])
                 global_step = model.global_step.eval()
 
-                # Show information to user
-                test_loss_avg += (batch_cost - test_loss_avg)/(cur_batch_iter+1)
-                test_wer_avg += (wer - test_wer_avg)/(cur_batch_iter+1)
                 # Watch performance
                 num_examples_in_batch = beam_probs.shape[0]
-                for example_id in range(num_examples_in_batch):
-                    # TODO dump the test results to a file rather than to screen
-                    print_details_on_example(example_id, "test", batched_samples[cur_batch_iter],
-                                                        batched_sample_lens[cur_batch_iter],
-                                                        batched_transcripts[cur_batch_iter],
-                                                        beam_decoded,
-                                                        beam_probs,
-                                                        label_encoder,
-                                                        limit_beam_to=1)
+                true_transcripts = generate_all_str(batched_transcripts[cur_batch_iter], label_encoder)
+                decoded_transcripts = generate_all_str(beam_decoded[0], label_encoder)
+                decoded_transcripts_corrected = [correction(transcript) for transcript in decoded_transcripts]
+                
+                # Print decodings
+                for true, decoded, corrected in zip(true_transcripts, decoded_transcripts, decoded_transcripts_corrected):
+                    print(true)
+                    print(decoded)
+                    print(corrected)
+                    print("")
+
+                # Compute metrics
+                cer = compute_cer(true_transcripts, decoded_transcripts)
+                wer = compute_wer(true_transcripts, decoded_transcripts)
+                cer_corrected = compute_cer(true_transcripts, decoded_transcripts_corrected)
+                wer_corrected = compute_wer(true_transcripts, decoded_transcripts_corrected)
+
+                # Update averages
+                for i, (c, w) in enumerate(zip(cer_corrected, wer_corrected)):
+                    session_cers[batched_sessions[cur_batch_iter][i]].append(c)
+                    session_wers[batched_sessions[cur_batch_iter][i]].append(w)
+                    mode_cers[batched_modes[cur_batch_iter][i]].append(c)
+                    mode_wers[batched_modes[cur_batch_iter][i]].append(w)
+                cer_avg += (np.mean(cer) - cer_avg)/(cur_batch_iter+1)
+                wer_avg += (np.mean(wer) - wer_avg)/(cur_batch_iter+1)
+                cer_corrected_avg += (np.mean(cer_corrected) - cer_corrected_avg)/(cur_batch_iter+1)
+                wer_corrected_avg += (np.mean(wer_corrected) - wer_corrected_avg)/(cur_batch_iter+1)
+                test_loss_avg += (batch_cost - test_loss_avg)/(cur_batch_iter+1)
+
                 # Write to Tensorboard
+                wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=np.mean(wer))])
+                test_writer.add_summary(wer_summary, global_step)
                 test_writer.add_summary(summary, global_step)
                 test_writer.flush()
-                
-            log = "Test_cost = {:.3f}, test_wer = {:.3f}, time = {:.3f}"
-            print(log.format(test_loss_avg, test_wer_avg, 
-                             time.time() - test_start))
 
+            print("\n=========== TEST SET REPORT =============\n")
+            print("Time:", time.time() - test_start)
+            print("")
+            log = "Averages per utterance:\n    Cost: {:.3f}\n    CER: {:.3f}\n    WER: {:.3f}\n    CER (after autocorrect): {:.3f}\n    WER (after autocorrect): {:.3f}\n"
+            print(log.format(test_loss_avg, cer_avg, wer_avg, cer_corrected_avg, wer_corrected_avg))
+            print("Average utterance CER by session, after autocorrect:")
+            print_dict(session_cers)
+            print("")
+            print("Average utterance WER by session, after autocorrect:")
+            print_dict(session_wers)
+            print("")
+            print("Average CER per session, after autocorrect:", np.mean([np.mean(cs) for cs in session_cers.values()]))
+            print("Average WER per session, after autocorrect:", np.mean([np.mean(ws) for ws in session_wers.values()]))
+            print("")
+            print("Average utterance CER by mode, after autocorrect:")
+            print_dict(mode_cers)
+            print("")
+            print("Average utterance WER by mode, after autocorrect:")
+            print_dict(mode_wers)
+            print("")
+
+def print_dict(d):
+    for key in d:
+        log = "    " + key + " : {:.3f}"
+        print(log.format(np.mean(d[key])))
 
 def parse_commandline():
     """
@@ -367,19 +425,36 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data, feature_type, mode, label_encoder=None):
+def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, 
+                dummies=None, dummy_train=None, 
+                use_scaler=True, scaler=None):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder)
+    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, use_scaler, scaler)
     if label_encoder is None:
-        samples, sample_lens, transcripts, label_encoder = feat_info
+        if dummy_train is not None:
+            raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
+        if use_scaler and scaler is not None:
+            raise ValueError("When label encoder is None, that means we're training -- so scaler should be None too. But it isn't.")
+        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler = feat_info
         # Store label_encoder to disk
         label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
         with open(label_fn, "wb") as f:
             pickle.dump(label_encoder, f)
-        print("Labels stored")
+        # Store dummy_train to disk
+        dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
+        with open(dummy_fn, "wb") as f:
+            pickle.dump(dummy_train, f)
+        print("Labels (label_encoder and dummy_train) stored")
+        
+        if use_scaler:
+            # Store scaler
+            scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
+            with open(scaler_fn, "wb") as f:
+                pickle.dump(scaler, f)
+            print("Scaler stored")
     else:
-        samples, sample_lens, transcripts, _ = feat_info
+        samples, sample_lens, transcripts, _, _, modes, sessions, scaler = feat_info
     
     # Verify to user load succeeded
     print("------")
@@ -392,7 +467,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None):
     print(transcripts[0])
     print(label_encoder.inverse_transform(transcripts[0]))
     
-    return samples, sample_lens, transcripts, label_encoder
+    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler
   
 def main(args):
     # TODO make the storing of config files with the more natural -- 
@@ -405,11 +480,11 @@ def main(args):
     
     if args.phase == 'train':
         # Get the training data
-        data_tr, lens_tr, transcripts_tr, le = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, None)
+        data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _, scaler = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, Config.use_scaler, None)
         # Get the dev data using the same label_encoder
-        data_de, lens_de, transcripts_de, _ = prep_data(args, 
-                    Config.dev_path, Config.feature_type, Config.mode, le)
+        data_de, lens_de, transcripts_de, _, _ , _, _, _ = prep_data(args, 
+                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train, Config.use_scaler, scaler)
         # Run model training         
         train_model(args, data_tr, lens_tr, transcripts_tr, le,
                           data_de, lens_de, transcripts_de)
@@ -426,11 +501,34 @@ def main(args):
         else:
             raise RuntimeError("Cannot restore label_encoder from %s" % label_fn)
             
+        # Retrieve dummy_train
+        dummy_train = None
+        if Config.dummies is not None:
+            dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
+            if dummy_fn and os.path.isfile(dummy_fn):
+                with open(dummy_fn, "rb") as f:
+                    dummy_train = pickle.load(f)
+                print("Dummy values from training restored")
+            else:
+                raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
+                
+        # Retrieve scaler
+        scaler = None
+        if Config.use_scaler:
+            scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
+            if scaler_fn and os.path.isfile(scaler_fn):
+                with open(scaler_fn, "rb") as f:
+                    scaler = pickle.load(f)
+                print("Scaler restored")
+            else:
+                raise RuntimeError("Scaler desired -- but no scaler available in %s for this run!" % scaler_fn)
+            
         # Prep data
-        data, lens, transcripts, _ = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, label_encoder)
+        data, lens, transcripts, _, _, modes, sessions, _ = prep_data(args, 
+                    Config.test_path, Config.feature_type, Config.mode, label_encoder, 
+                    Config.dummies, dummy_train, Config.use_scaler, scaler)
         # Run the model test           
-        test_model(args, data, lens, transcripts, label_encoder)
+        test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
     
     else:
         raise RuntimeError("Phase '%s' is unknown" % args.phase)

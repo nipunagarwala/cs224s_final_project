@@ -6,6 +6,7 @@ class Config(object):
     ##########################
     checkpoint_dir = "checkpoints"
     tensorboard_dir = "tensorboard"
+    tensorboard_prefix = "my_run"
     steps_per_checkpoint = 25
     freq_of_longterm_checkpoint = 0.5     # in hours
     
@@ -13,7 +14,7 @@ class Config(object):
     # Reporting configuration
     ##########################
     # Frequency with which to print quant & qual 
-    # monitoring information to stdout for user enjoyment
+    # monitoring information to stdout and tensorboard 
     steps_per_train_report = 1
     steps_per_dev_report = 10
     
@@ -29,9 +30,21 @@ class Config(object):
     mode = None
     
     # What type of features to extract from the data
-    # Valid feature_types: "wand_lda", "wand", "spectrogram"
+    # Valid feature_types: 
+    # - "wand": stacked time-domain features derived from DFT re: Wand papers
+    # - "wand_lda": wand limited to the 12-dim subspace that best represents all triphone labels
+    # - "wand_ldaa": wand limited to the 12-dim subspace that best represents *audible* triphone labels
+    # - "spectrogram": discrete Fourier transform of each frame
     feature_type = "wand_lda"
-       
+    
+    # What additional dummies to include:
+    # None (no dummies), or a list with any of: 
+    # ["speakerId", "speakerSess", "gender", "mode"]
+    dummies = None#["speakerId", "speakerSess", "gender", "mode"]
+    
+    # Whether to ensure features have zero-mean and unit variance
+    use_scaler = False
+    
     ##########################
     # Model architecture
     ##########################
@@ -64,5 +77,8 @@ class Config(object):
     # maximum norm globally is scaled to this value
     max_norm = 10 
     
-    # Number of predictions to generate
-    beam_size = 10
+    # Beam search: number of predictions to generate
+    top_paths = 5
+
+    # Beam search: beam width
+    beam_width = 100

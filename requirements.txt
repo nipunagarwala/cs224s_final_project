@@ -10,3 +10,4 @@ pandas==0.18.1
 soundfile
 autocorrect
 editdistance
+https://github.com/kpu/kenlm/archive/master.zip

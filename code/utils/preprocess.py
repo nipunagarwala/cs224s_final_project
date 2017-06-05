@@ -8,6 +8,7 @@ import os
 import scipy.signal
 
 import numpy as np
+import pandas as pd
 
 from itertools import chain
 from collections import Counter
@@ -232,7 +233,7 @@ def transform(samples, lda):
 
     return samples
 
-def wand_lda(samples, phone_labels, n_components=12):
+def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
     """
     Fits the n_components most discriminant features in the samples with respect 
     to the triphone labels, and transforms the samples accordingly. samples
@@ -241,6 +242,10 @@ def wand_lda(samples, phone_labels, n_components=12):
     Inputs:
         samples: a list of n_sample tensors, each of shape (n_feats, n_timesteps)
         phone_labels: a list of n_sample lists, each of length n_timesteps
+        n_components: number of output components
+        subset_to_use: a list of n_sample booleans, each one indicating whether
+            to use the corresponding sample and phone_labels in fitting the LDA,
+            or None if all should be used
 
         NOTE: n_timesteps can be different per sample!
 
@@ -248,17 +253,29 @@ def wand_lda(samples, phone_labels, n_components=12):
         samples: a list of n_sample np.ndarrays, each of shape
             (n_components, n_timesteps)
     """
+    if subset_to_use is None:
+        tr_samples = samples
+        tr_phone_labels = phone_labels
+    else:
+        tr_samples, tr_phone_labels = [], []
+        for i in range(len(samples)):
+            if subset_to_use[i]:
+                tr_samples.append(samples[i])
+                tr_phone_labels.append(phone_labels[i])
+    
+    if len(tr_samples) == 0:
+        raise ValueError("Cannot perform LDA on no input data!")
+    
+    n_feats = tr_samples[0].shape[0]
+    total_timesteps = sum(s.shape[1] for s in tr_samples)
 
-    n_feats = samples[0].shape[0]
-    total_timesteps = sum(s.shape[1] for s in samples)
-
-    phone_lookup = labels_to_int_lookup(phone_labels)
+    phone_lookup = labels_to_int_lookup(tr_phone_labels)
 
     X = np.zeros((total_timesteps, n_feats))
     y = np.zeros(total_timesteps, dtype=np.int32)
 
     cur_timestep = 0
-    for s, (feats, labels) in enumerate(zip(samples, phone_labels)):
+    for s, (feats, labels) in enumerate(zip(tr_samples, tr_phone_labels)):
         for t in range(len(labels)):
             X[cur_timestep, :] = feats[:,t]
             y[cur_timestep] = phone_lookup[labels[t]]
@@ -274,14 +291,16 @@ def extract_features(pkl_filename, feature_type):
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
 
-    if feature_type == "wand" or feature_type == "wand_lda":
+    if feature_type == "wand" or feature_type == "wand_lda" or feature_type == "wand_ldaa":
         return wand_features(emg)
     elif feature_type == "spectrogram":
         return spectrogram_features(emg)
     else:
         raise RuntimeError("Invalid feature type specified")
 
-def extract_all_features(directory, feature_type, session_type=None, le=None):
+def extract_all_features(directory, feature_type, session_type=None, 
+    le=None, dummies=None, dummy_train=None, 
+    use_scaler=True, scaler=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -289,11 +308,19 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
     Inputs:
         directory: a directory containing utteranceInfo.pkl and the pkl files
             for all utterances specified in utteranceInfo.pkl.
-        feature_type: either "wand", "wand_lda", or "spectrogram".
+        feature_type: either "wand", "wand_lda", "wand_ldaa", or "spectrogram".
         session_type: None, "audible", "whispered", or "silent". if None, 
             extracts features for all sessions.
         le: an existing label encoder; can be None if a new label_encoder
             should be created
+        dummies: a list of column names from utteranceInfo for which to create
+            dummies to feed in over time, or None if no dummies should be created
+            (e.g., dummies=["speakerId", "speakerSess", "gender", "mode"] )
+        dummy_train: a pd.DataFrame containing the dummies from the training data,
+            or None; the dataframe allows us to match new data to existing data 
+        use_scaler: boolean indicating whether to use the scaler
+        scaler: sklearn.preprocessing.StandardScaler object to use for transform,
+            or None if a new transformer should be learned, or "ignore" if ignored
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
@@ -303,26 +330,48 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
         transcripts: a list of strings of shape (n_samples,) containing the
             transcript of sample padded_samples[i].
         label_encoder: a sklearn.preprocessing.LabelEncoder for the transcripts
+        dummy_train: a pd.DataFrame containing the dummies from the training data;
+            matches the incoming dummy_train unless incoming dummy_train was None
+        scaler: a sklearn.preprocessing.StandardScaler object used for transform
     """
     samples = []
     original_transcripts = []
     phone_labels = []
+    is_audible_sample = []
+    modes = []
+    sessions = []
 
     meta_info_path = os.path.join(directory, "utteranceInfo.pkl")
     try:
         with open(meta_info_path, "rb") as f:
             meta = pickle.load(f)
+            meta["speakerSess"] =  meta["speakerId"] + "_" + meta["sessionId"]
+            
+            # If we want dummies, create/store the dummies as needed
+            if dummies is not None:
+                # Create them
+                meta_dummies = pd.get_dummies(meta[dummies])
+                if dummy_train is None:
+                    # Store it for future
+                    dummy_train = meta_dummies
+                else:
+                    # Reindex to match the training data, filling blanks with zeros
+                    meta_dummies = meta_dummies.reindex(columns = dummy_train.columns, fill_value=0)
+                meta_dummies = meta_dummies.as_matrix()
     except FileNotFoundError:
         print("Cannot open file %s -- check that directory to see if it needs to be renamed to the hardcoded path" % os.path.join(directory, "utteranceInfo.pkl"))
-    
+
     for i, utterance in meta.iterrows():
         if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
         features, phones = extract_features(pkl_filename, feature_type)
         samples.append(features)
+        modes.append(utterance["mode"])
+        sessions.append(utterance["speakerSess"])
         original_transcripts.append(utterance["transcript"])
         phone_labels.append(phones)
+        is_audible_sample.append(utterance["mode"] == "audible")
         
     if len(samples) == 0:
         raise ValueError("Dataset %s has no entries when filtered for '%s' " % 
@@ -330,6 +379,8 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
         
     if feature_type == "wand_lda":
         samples = wand_lda(samples, phone_labels)
+    elif feature_type == "wand_ldaa":
+        samples = wand_lda(samples, phone_labels, subset_to_use=is_audible_sample)
 
     # Build the encodings
     if le is None:
@@ -337,10 +388,17 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
         le.fit(list(chain.from_iterable(list(x) for x in original_transcripts)))
     transcripts = []
     for text in original_transcripts:
-        transcripts.append(le.transform(list(text)))
+        transcripts.append(le.transform([c for c in list(text) if c in le.classes_]))
         
     # Get lengths
-    sample_lens = np.array([s.shape[1] for s in samples], dtype=np.int64)
+    sample_lens = []
+    for i, s in enumerate(samples):
+        sample_lens.append(s.shape[1])
+        if dummies is not None:
+            dummies_through_time = np.ones((meta_dummies[i].shape[0], s.shape[1]))
+            dummies_through_time *= meta_dummies[i][:,np.newaxis]
+            s = np.vstack([s, dummies_through_time])
+    sample_lens = np.array(sample_lens, dtype=np.int64)
 
     n_samples = len(samples)
     n_feats = samples[0].shape[0]
@@ -354,12 +412,25 @@ def extract_all_features(directory, feature_type, session_type=None, le=None):
 
     # Ensure samples are shaped (n_samples, max_timesteps, n_features)
     padded_samples = np.transpose(padded_samples, (0, 2, 1))
-    return padded_samples, sample_lens, np.array(transcripts), le
+    n_signals, max_timesteps, n_feats = padded_samples.shape
+    
+    if use_scaler:
+        if scaler is None:
+            scaler = preprocessing.StandardScaler()
+            padded_samples = np.reshape(padded_samples, (-1, n_feats))
+            scaler.fit(padded_samples)
+            padded_samples = np.reshape(padded_samples, (n_samples, max_timesteps, n_feats))
+        padded_samples = np.reshape(padded_samples, (-1, n_feats))
+        padded_samples = scaler.transform(padded_samples)
+        padded_samples = np.reshape(padded_samples, (n_samples, max_timesteps, n_feats))
+        
+    return (padded_samples, sample_lens, np.array(transcripts), le, 
+            dummy_train, np.array(modes), np.array(sessions), scaler)
 
 if __name__ == "__main__":
     """
     To test, run from root directory: python3 code/utils/preprocess.py
     """
-    samples, lens, transcripts = extract_all_features("sample-data/train/", "wand")
-    samples, lens, transcripts = extract_all_features("sample-data/train/", "spectrogram")
-    samples, lens, transcripts = extract_all_features("sample-data/train/", "wand_lda")
+    samples, lens, transcripts, _, _ = extract_all_features("sample-data/train/", "wand")
+    samples, lens, transcripts, _, _ = extract_all_features("sample-data/train/", "spectrogram")
+    samples, lens, transcripts, _, _ = extract_all_features("sample-data/train/", "wand_lda")

@@ -95,8 +95,8 @@ class SimpleEmgNN(object):
         self.all_decoded_sequences, self.all_decoded_probs = tf.nn.ctc_beam_search_decoder(
                                     inputs=self.logits, 
                                     sequence_length=self.seq_lens_placeholder,
-                                    beam_width=self.config.beam_size, 
-                                    top_paths=self.config.beam_size,
+                                    beam_width=self.config.beam_width, 
+                                    top_paths=self.config.top_paths,
                                     merge_repeated=True)
         decoded_sequence = tf.cast(self.all_decoded_sequences[0], tf.int32)
         
@@ -346,8 +346,8 @@ class MultiSharedEmgNN(object):
         all_decoded_sequences, all_decoded_probs = tf.nn.ctc_beam_search_decoder(
                                     inputs=logits, 
                                     sequence_length=seq_len,
-                                    beam_width=config.beam_size, 
-                                    top_paths=config.beam_size,
+                                    beam_width=config.beam_width, 
+                                    top_paths=config.top_paths,
                                     merge_repeated=True)
         decoded_sequence = tf.cast(all_decoded_sequences[0], tf.int32)
 
@@ -563,18 +563,3 @@ class MultiModalEmgNN(object):
         combined_outputs = tf.concat([self.audible_logits, self.whisp_logits, self.silent_logits], axis=1)
 
         with tf.variable_scope(self.shared_scope):
-            
-
-
-
-
-
-
-
-        
-
-
-
-
-
-

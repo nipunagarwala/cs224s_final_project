@@ -20,12 +20,20 @@ def compute_wer(true_transcripts, decoded_transcripts):
         distance = editdistance.eval(target_words, decoded_words)
         wer = distance / len(target_words)
         wers.append(wer)
-    return np.mean(wers)
+    return wers
+
+def compute_cer(true_transcripts, decoded_transcripts):
+    cers = []
+    for target, decoded in zip(true_transcripts, decoded_transcripts):
+        distance = editdistance.eval(target, decoded)
+        cer = distance / len(target)
+        cers.append(cer)
+    return cers
 
 def make_batch(array, n_batches, batch_size):
     return np.stack([array[i*batch_size:i*batch_size+batch_size] for i in range(n_batches)])
 
-def make_batches(samples, sample_lens, transcripts, batch_size):
+def make_batches(samples, sample_lens, transcripts, batch_size, modes=None, sessions=None):
     """
     Shuffles the input data into batches.
 
@@ -51,6 +59,12 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
     samples = samples[p]
     sample_lens = sample_lens[p]
     transcripts = transcripts[p]
+    if modes is not None:
+        modes = modes[p]
+        batched_modes = []
+    if sessions is not None:
+        sessions = sessions[p]
+        batched_sessions = []
     
     batched_samples = []
     batched_sample_lens = []
@@ -61,8 +75,19 @@ def make_batches(samples, sample_lens, transcripts, batch_size):
         batched_sample_lens.append(sample_lens[i*batch_size: (i+1)*batch_size])
         # Transcripts must be sparse because of tensorflow CTC requirements
         batched_transcripts.append(sparse_tuple_from(transcripts[i*batch_size: (i+1)*batch_size]))
+        if modes is not None:
+            batched_modes.append(modes[i*batch_size:(i+1)*batch_size])
+        if sessions is not None:
+            batched_sessions.append(sessions[i*batch_size:(i+1)*batch_size])
 
-    return batched_samples, batched_transcripts, batched_sample_lens
+    return_args = [batched_samples, batched_transcripts, batched_sample_lens]
+
+    if modes is not None:
+        return_args.append(batched_modes)
+    if sessions is not None:
+        return_args.append(batched_sessions)
+
+    return return_args
 
 
 def sparse_tuple_from(sequences, dtype=np.int32):
