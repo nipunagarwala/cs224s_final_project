@@ -308,21 +308,22 @@ class MultiSharedEmgNN(object):
         cost = tf.reduce_mean(loss_without_invalid_paths) 
 
         loss = config.l2_lambda * l2_cost + cost
-        tf.summary.scalar(summary_name, loss)
+        
+        loss_summary = tf.summary.scalar(summary_name, loss)
 
-        return num_valid_examples, loss
+        return num_valid_examples, loss, loss_summary
 
 
     def add_loss_op(self):
-        self.audible_valid_examples, self.audible_loss = self.add_model_loss_op(self.audible_logits,
+        self.audible_valid_examples, self.audible_loss, self.audible_loss_summary = self.add_model_loss_op(self.audible_logits,
                  self.targets_audio_placeholder, self.seq_lens_audio_placeholder, self.config_audio,
                 "audible_loss", self.audible_scope, self.shared_scope)
 
-        self.whisp_valid_examples, self.whisp_loss = self.add_model_loss_op(self.whisp_logits,
+        self.whisp_valid_examples, self.whisp_loss, self.whisp_loss_summary = self.add_model_loss_op(self.whisp_logits,
                  self.targets_whisp_placeholder, self.seq_lens_whisp_placeholder, self.config_whisp,
                 "whisp_loss", self.whisp_scope, self.shared_scope)
 
-        self.silent_valid_examples, self.silent_loss = self.add_model_loss_op(self.silent_logits,
+        self.silent_valid_examples, self.silent_loss, self.silent_loss_summary = self.add_model_loss_op(self.silent_logits,
                  self.targets_silent_placeholder, self.seq_lens_silent_placeholder, self.config_silent,
                 "silent_loss", self.silent_scope, self.shared_scope)
 
@@ -359,27 +360,29 @@ class MultiSharedEmgNN(object):
 
         wer = tf.reduce_mean(tf.edit_distance(decoded_sequence,
                                               targets, normalize=True))
-        tf.summary.scalar(summary_name, wer)
+        wer_summary = tf.summary.scalar(summary_name, wer)
 
-        return all_decoded_sequences, all_decoded_probs, wer
+        return all_decoded_sequences, all_decoded_probs, wer, wer_summary
 
 
     def add_decoder_and_wer_op(self):
-        self.audible_decoded_seq, self.audible_decoded_probs, self.audible_wer = \
+        self.audible_decoded_seq, self.audible_decoded_probs, self.audible_wer, self.audible_wer_summary = \
             self.add_model_results_op(self.audible_logits, self.seq_lens_audio_placeholder, 
                                       self.config_audio, self.targets_audio_placeholder, 'audible_wer')
 
-        self.whisp_decoded_seq, self.whisp_decoded_probs, self.whisp_wer = \
+        self.whisp_decoded_seq, self.whisp_decoded_probs, self.whisp_wer, self.whisp_wer_summary = \
             self.add_model_results_op(self.whisp_logits, self.seq_lens_whisp_placeholder, 
                                       self.config_whisp, self.targets_whisp_placeholder, 'whisp_wer')
 
-        self.silent_decoded_seq, self.silent_decoded_probs, self.silent_wer = \
+        self.silent_decoded_seq, self.silent_decoded_probs, self.silent_wer, self.silent_wer_summary = \
             self.add_model_results_op(self.silent_logits, self.seq_lens_silent_placeholder, 
                                       self.config_silent, self.targets_silent_placeholder, 'silent_wer')
 
 
     def add_summary_op(self):
-        self.merged_summary_op = tf.summary.merge_all()
+        self.audible_merged_summary_op = tf.summary.merge(inputs=[self.audible_wer_summary, self.audible_loss_summary])
+        self.whisp_merged_summary_op = tf.summary.merge(inputs=[self.whisp_wer_summary, self.whisp_loss_summary])
+        self.silent_merged_summary_op = tf.summary.merge(inputs=[self.silent_wer_summary, self.silent_loss_summary])
 
     def get_audible_feed_dict(self, input_batch, target_batch, seq_batch):
         feed_dict = {
@@ -408,9 +411,10 @@ class MultiSharedEmgNN(object):
 
     def train_one_audible_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_audible_feed_dict(input_batch, target_batch, seq_batch)
-        _, batch_cost, wer, beam_decoded, beam_probs = session.run([self.audible_train_op, 
+        _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.audible_train_op, 
                                             self.audible_loss, 
                                             self.audible_wer, 
+                                            self.audible_merged_summary_op,
                                             # self.merged_summary_op,
                                             self.audible_decoded_seq,
                                             self.audible_decoded_probs], 
@@ -419,13 +423,14 @@ class MultiSharedEmgNN(object):
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
 
-        return batch_cost, wer, None, beam_decoded, beam_probs
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
     def train_one_whisp_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_whisp_feed_dict(input_batch, target_batch, seq_batch)
-        _, batch_cost, wer, beam_decoded, beam_probs = session.run([self.whisp_train_op, 
+        _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.whisp_train_op, 
                                             self.whisp_loss, 
                                             self.whisp_wer, 
+                                            self.whisp_merged_summary_op,
                                             # self.merged_summary_op,
                                             self.whisp_decoded_seq,
                                             self.whisp_decoded_probs], 
@@ -434,13 +439,14 @@ class MultiSharedEmgNN(object):
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
 
-        return batch_cost, wer, None, beam_decoded, beam_probs
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
     def train_one_silent_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_silent_feed_dict(input_batch, target_batch, seq_batch)
-        _, batch_cost, wer, beam_decoded, beam_probs = session.run([self.silent_train_op, 
+        _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.silent_train_op, 
                                             self.silent_loss, 
                                             self.silent_wer, 
+                                            self.silent_merged_summary_op,
                                             # self.merged_summary_op,
                                             self.silent_decoded_seq,
                                             self.silent_decoded_probs], 
@@ -449,7 +455,7 @@ class MultiSharedEmgNN(object):
         if math.isnan(batch_cost): # basically all examples in this batch have been skipped 
             return 0
 
-        return batch_cost, wer, None, beam_decoded, beam_probs
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
     def train_one_batch(self, session, input_batch, target_batch, seq_batch, mode):
         if mode == 'audible':
@@ -461,33 +467,36 @@ class MultiSharedEmgNN(object):
 
     def test_one_audible_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_audible_feed_dict(input_batch, target_batch, seq_batch)
-        batch_cost, wer, beam_decoded, beam_probs = session.run([self.audible_loss, 
+        batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.audible_loss, 
                                                 self.audible_wer, 
+                                                self.audible_merged_summary_op,
                                                 # self.merged_summary_op,
                                                 self.audible_decoded_seq,
                                                 self.audible_decoded_probs], 
                                                 feed_dict)
-        return batch_cost, wer, None, beam_decoded, beam_probs
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
     def test_one_whisp_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_whisp_feed_dict(input_batch, target_batch, seq_batch)
-        batch_cost, wer, beam_decoded, beam_probs = session.run([self.whisp_loss, 
+        batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.whisp_loss, 
                                                 self.whisp_wer, 
+                                                self.whisp_merged_summary_op,
                                                 # self.merged_summary_op,
                                                 self.whisp_decoded_seq,
                                                 self.whisp_decoded_probs], 
                                                 feed_dict)
-        return batch_cost, wer, None, beam_decoded, beam_probs
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
     def test_one_silent_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_silent_feed_dict(input_batch, target_batch, seq_batch)
-        batch_cost, wer, beam_decoded, beam_probs = session.run([self.silent_loss, 
+        batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.silent_loss, 
                                                 self.silent_wer, 
+                                                self.silent_merged_summary_op,
                                                 # self.merged_summary_op,
                                                 self.silent_decoded_seq,
                                                 self.silent_decoded_probs], 
                                                 feed_dict)
-        return batch_cost, wer, None, beam_decoded, beam_probs
+        return batch_cost, wer, summary, beam_decoded, beam_probs
 
     def test_one_batch(self, session, input_batch, target_batch, seq_batch, mode):
         if mode == 'audible':

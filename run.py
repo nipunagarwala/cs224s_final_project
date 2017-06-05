@@ -238,9 +238,8 @@ def run_epoch(args, session, model, samples_tr, sample_lens_tr, transcripts_tr, 
                                         label_encoder)
 
             # Tensorboard -- training
-            if args.model != 'shared_emg':
-                train_writer.add_summary(train_summary, global_step)   
-                train_writer.flush()
+            train_writer.add_summary(train_summary, global_step)   
+            train_writer.flush()
 
 
         # Monitor training -- dev performance
@@ -279,9 +278,8 @@ def run_epoch(args, session, model, samples_tr, sample_lens_tr, transcripts_tr, 
             dev_writer.add_summary(dev_wer_summary, global_step)
 
             # Tensorboard -- dev results
-            if args.model != 'shared_emg':
-                dev_writer.add_summary(dev_summary, global_step)
-                dev_writer.flush()
+            dev_writer.add_summary(dev_summary, global_step)
+            dev_writer.flush()
             
             # Increment dev_iter
             dev_iter += 1
