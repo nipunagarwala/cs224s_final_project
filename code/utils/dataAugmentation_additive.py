@@ -93,4 +93,3 @@ if __name__ == "__main__":
 
     signal = emg["emg1"]
     signalNoise = add_noise(signal)
-

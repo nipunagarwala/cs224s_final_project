@@ -463,7 +463,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None,
     # Verify to user load succeeded
     print("------")
     print("Features successfully extracted. Verification:")
-    print("Total samples: ")
+    print("Total samples:")
     print(len(samples))
     print("Input 0 shape (max_timesteps, n_features):")
     print(samples[0].shape)
