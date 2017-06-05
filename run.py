@@ -213,6 +213,7 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
 
                     should_train_report = (global_step % Config.steps_per_train_report == 0)
                     should_dev_report = (global_step % Config.steps_per_dev_report == 0)
+                    should_test_report = (global_step % Config.steps_per_test_report == 0) if Config.steps_per_test_report else 25
                     should_checkpoint = (global_step % Config.steps_per_checkpoint == 0)
                     
                     # Monitor training -- training performance
@@ -425,14 +426,19 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummies=None, dummy_train=None, scaler=None, lda=None):
+def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, 
+                dummies=None, dummy_train=None, 
+                use_scaler=True, scaler=None,
+                should_augment=False, lda=None):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, scaler, lda=lda)
+    feat_info = extract_all_features(path_to_data, feature_type, mode, 
+                    label_encoder, dummies, dummy_train, use_scaler, scaler,
+                    should_augment, lda)
     if label_encoder is None:
         if dummy_train is not None:
             raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
-        if scaler is not None:
+        if use_scaler and scaler is not None:
             raise ValueError("When label encoder is None, that means we're training -- so scaler should be None too. But it isn't.")
         samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler, lda = feat_info
         # Store label_encoder to disk
@@ -444,22 +450,26 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
         with open(dummy_fn, "wb") as f:
             pickle.dump(dummy_train, f)
         print("Labels (label_encoder and dummy_train) stored")
-        # Store scaler
-        scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
-        with open(scaler_fn, "wb") as f:
-            pickle.dump(scaler, f)
-        print("Scaler stored")
         # Store LDA
         lda_fn = os.path.join(Config.checkpoint_dir, "lda.pkl")
         with open(lda_fn, "wb") as f:
             pickle.dump(lda, f)
         print("LDA transform stored")
+        
+        if use_scaler:
+            # Store scaler
+            scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
+            with open(scaler_fn, "wb") as f:
+                pickle.dump(scaler, f)
+            print("Scaler stored")
     else:
         samples, sample_lens, transcripts, _, _, modes, sessions, scaler, lda = feat_info
     
     # Verify to user load succeeded
     print("------")
     print("Features successfully extracted. Verification:")
+    print("Total samples:")
+    print(len(samples))
     print("Input 0 shape (max_timesteps, n_features):")
     print(samples[0].shape)
     print("Input 0 active timesteps")
@@ -482,10 +492,14 @@ def main(args):
     if args.phase == 'train':
         # Get the training data
         data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _, scaler, lda = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, None, None)
+                    Config.train_path, Config.feature_type, Config.mode, 
+                    None, Config.dummies, None, Config.use_scaler, None,
+                    getattr(Config, "should_augment", False), None)
         # Get the dev data using the same label_encoder and LDA transform
         data_de, lens_de, transcripts_de, _, _ , _, _, _, _ = prep_data(args, 
-                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train, scaler, lda)
+                    Config.dev_path, Config.feature_type, Config.mode, 
+                    le, Config.dummies, dummy_train, Config.use_scaler, scaler,
+                    False, lda)
         # Run model training         
         train_model(args, data_tr, lens_tr, transcripts_tr, le,
                           data_de, lens_de, transcripts_de)
@@ -514,15 +528,16 @@ def main(args):
                 raise RuntimeError("Cannot restore dummy_train from %s" % dummy_fn)
                 
         # Retrieve scaler
-        scaler = "ignore"
-        scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
-        if scaler_fn and os.path.isfile(scaler_fn):
-            with open(scaler_fn, "rb") as f:
-                scaler = pickle.load(f)
-            print("Scaler restored")
-        else:
-            warnings.warn("No scaler for this run!  No units have been normalized as per training data.")
-
+        scaler = None
+        if Config.use_scaler:
+            scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
+            if scaler_fn and os.path.isfile(scaler_fn):
+                with open(scaler_fn, "rb") as f:
+                    scaler = pickle.load(f)
+                print("Scaler restored")
+            else:
+                raise RuntimeError("Scaler desired -- but no scaler available in %s for this run!" % scaler_fn)
+        
         # Retrieve LDA transform
         lda_fn = os.path.join(Config.checkpoint_dir, "lda.pkl")
         if lda_fn and os.path.isfile(lda_fn):
@@ -534,9 +549,10 @@ def main(args):
 
         # Prep data
         data, lens, transcripts, _, _, modes, sessions, _, _ = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, label_encoder, 
-                    Config.dummies, dummy_train, scaler, lda)
-
+                    Config.test_path, Config.feature_type, Config.mode, label_encoder, 
+                    Config.dummies, dummy_train, Config.use_scaler, scaler,
+                    False, lda)
+        
         # Run the model test
         test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
     
