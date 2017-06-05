@@ -361,7 +361,7 @@ def remove_noise(emg):
         emg[channel] = butter_bandstop_filter(emg[channel], 49., 51., EMG_F_SAMPLE, order=2)
     return emg
 
-def extract_features(pkl_filename, feature_type, should_subset=False, should_address_noise=False):
+def extract_features(pkl_filename, feature_type, should_subset=False, should_address_noise=False):    
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
         
@@ -449,6 +449,9 @@ def extract_all_features(directory, feature_type, session_type=None,
         if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
+        
+        # Print current status to user
+        print(i, pkl_filename)
         
         # Figure out how we want to add noise, as per user specifications
         add_addls = [False]
