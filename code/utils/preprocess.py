@@ -107,7 +107,7 @@ def triphones(phone, n_phones):
     return tris
 
 def compute_subphones(phones):
-    this_phone = phones[0]
+    this_phone = phones.iloc[0]
     n_this_phone = 0
     subphones = []
     for p in phones:
@@ -287,20 +287,80 @@ def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
 
     return samples
 
-def extract_features(pkl_filename, feature_type):
+def add_noise(emg):
+    """
+    Pretends there is an equal source of noise for all channels.
+    Amplitude of noise is chosen at random to be between 0 and 10% 
+    of the max amplitude of signal.  Period starts at random 
+    point in cycle.
+    """
+    MAX_AMPLITUDE = 32767
+
+    # Sampling
+    # 1 second of data requires 600 frames.  And 600 fps is 600 Hz, sampling rate of EMG.
+    fs = 600 
+    Ts = 1/fs
+
+    # Time vector
+    t = np.arange(0, len(emg)/fs, Ts) # each unit of t is a second
+
+    # Noise
+    randAmplitudeScale = np.random.random()*0.1
+    randOffset = np.random.random() * 2*np.pi
+    
+    fNoise = 60;                                           # Frequency [Hz]
+    aNoise = randAmplitudeScale*MAX_AMPLITUDE              # Amplitude
+    noise  = aNoise * np.sin(2 * np.pi * t * fNoise + randOffset)
+
+    # Add noise to signal
+    for channel in ["emg1", "emg2", "emg3", "emg4", "emg5", "emg6"]:
+        emg[channel] += noise
+    return emg
+    
+def select_subsequence(emg):
+    """ Given a sequence like "the cat slept", 
+    returns a consecutive sequence of words & corresponding data.
+    """
+    # Get locations of each word
+    new_word_begins = np.hstack([[0], np.where(emg["word"][1:] != emg["word"][:-1])[0] + 1])
+    #print(emg["word"][new_word_begins])
+    
+    # Select a random subsequence -- at least length 1, or at least length 2 if $ at end/begin
+    # is included, and guaranteed that begin comes before end
+    end_word, start_word = -1, -1
+    while (end_word <= start_word or 
+           end_word-start_word < 2 or 
+           end_word-start_word < 3 and (start_word == 0 or end_word == len(new_word_begins)-1)):
+        start_word = np.random.randint(len(new_word_begins)-2)
+        end_word = np.random.randint(start_word+1, len(new_word_begins))
+    
+    start_loc = new_word_begins[start_word]
+    end_loc = new_word_begins[end_word]
+    
+    transcript = " ".join(emg["word"][new_word_begins][start_word:end_word]).replace("$", "").strip()
+    e = emg[start_loc:end_loc]
+    return e, transcript
+    
+def extract_features(pkl_filename, feature_type, should_subset=False, should_add_noise=False):
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
+        
+    transcript = None
+    if should_subset:
+        emg, transcript = select_subsequence(emg)
+    if should_add_noise:
+        emg = add_noise(emg)
 
     if feature_type == "wand" or feature_type == "wand_lda" or feature_type == "wand_ldaa":
-        return wand_features(emg)
+        return wand_features(emg), transcript
     elif feature_type == "spectrogram":
-        return spectrogram_features(emg)
+        return spectrogram_features(emg), transcript
     else:
         raise RuntimeError("Invalid feature type specified")
 
 def extract_all_features(directory, feature_type, session_type=None, 
     le=None, dummies=None, dummy_train=None, 
-    use_scaler=True, scaler=None):
+    use_scaler=True, scaler=None, should_augment=False):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -321,6 +381,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         use_scaler: boolean indicating whether to use the scaler
         scaler: sklearn.preprocessing.StandardScaler object to use for transform,
             or None if a new transformer should be learned, or "ignore" if ignored
+        should_augment: boolean indicating whether to augment data
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
@@ -365,13 +426,25 @@ def extract_all_features(directory, feature_type, session_type=None,
         if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
-        features, phones = extract_features(pkl_filename, feature_type)
-        samples.append(features)
-        modes.append(utterance["mode"])
-        sessions.append(utterance["speakerSess"])
-        original_transcripts.append(utterance["transcript"])
-        phone_labels.append(phones)
-        is_audible_sample.append(utterance["mode"] == "audible")
+        
+        # Figure out how we want to add noise, as per user specifications
+        add_addls = [False]
+        if should_augment:
+            add_addls += [True]*10
+        
+        # Add original, then then with any data augmentation added
+        for add_addl in add_addls:
+            (features, phones), transcript = extract_features(pkl_filename, feature_type, 
+                                                should_subset=add_addl, should_add_noise=add_addl)
+            samples.append(features)
+            modes.append(utterance["mode"])
+            sessions.append(utterance["speakerSess"])
+            if transcript is None: # use original
+                original_transcripts.append(utterance["transcript"])
+            else: # use doctored transcript from subsetting
+                original_transcripts.append(transcript)
+            phone_labels.append(phones)
+            is_audible_sample.append(utterance["mode"] == "audible")
         
     if len(samples) == 0:
         raise ValueError("Dataset %s has no entries when filtered for '%s' " % 
