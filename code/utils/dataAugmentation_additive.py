@@ -32,7 +32,7 @@ def add_noise(emg_signal, show_plot=True):
     randAmplitudeScale = np.random.random()*0.1
     randOffset = t[np.random.randint(0, fs)]
 
-    fNoise = 60;                                           # Frequency [Hz]
+    fNoise = 50;                                           # Frequency [Hz]
     aNoise = randAmplitudeScale*abs(np.max(emg_signal))    # Amplitude
     noise  = aNoise * np.sin(2 * np.pi * t * fNoise + randOffset)
 
@@ -61,7 +61,7 @@ def add_noise(emg_signal, show_plot=True):
         plt.subplot(3, 1, 2)
         plt.plot(t[DATA_XRANGE], noise[DATA_XRANGE])
         plt.ylim(DATA_YRANGE)
-        plt.text(.5,.98,"60 Hz Noise\n(Amplitude of %4.2fx Signal Range, Offset of %4.2f sec)" %
+        plt.text(.5,.98, "50 Hz Noise\n(Amplitude of %4.2fx Signal Range, Offset of %4.2f sec)" %
             (randAmplitudeScale, randOffset),
             horizontalalignment='center',
             verticalalignment='top',

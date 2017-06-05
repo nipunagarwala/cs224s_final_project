@@ -292,7 +292,8 @@ def add_noise(emg):
     Pretends there is an equal source of noise for all channels.
     Amplitude of noise is chosen at random to be between 0 and 10% 
     of the max amplitude of signal.  Period starts at random 
-    point in cycle.
+    point in cycle.  Is 50 Hz because data was collected in Germany,
+    where power is 230 volts/50 Hz (vs. US where it is 60 Hz)
     """
     MAX_AMPLITUDE = 32767
 
@@ -308,7 +309,7 @@ def add_noise(emg):
     randAmplitudeScale = np.random.random()*0.1
     randOffset = np.random.random() * 2*np.pi
     
-    fNoise = 60;                                           # Frequency [Hz]
+    fNoise = 50;                                           # Frequency [Hz]
     aNoise = randAmplitudeScale*MAX_AMPLITUDE              # Amplitude
     noise  = aNoise * np.sin(2 * np.pi * t * fNoise + randOffset)
 
@@ -342,7 +343,7 @@ def select_subsequence(emg):
     return e, transcript
 
 def remove_noise(emg):
-    """ Remove mains noise from all channels with a bandstop filter"""
+    """ Remove German power line noise of 50 Hz from all channels with a bandstop filter"""
     def butter_bandstop_filter(data, lowcut, highcut, fs, order=2):
         def butter_bandstop(lowcut, highcut, fs, order=2):
             nyq = 0.5 * fs
@@ -357,7 +358,7 @@ def remove_noise(emg):
     
     # Remove noise from signal
     for channel in ["emg1", "emg2", "emg3", "emg4", "emg5", "emg6"]:
-        emg[channel] = butter_bandstop_filter(emg[channel], 59., 61., 600., order=2)
+        emg[channel] = butter_bandstop_filter(emg[channel], 49., 51., 600., order=2)
     return emg
 
 def extract_features(pkl_filename, feature_type, should_subset=False, should_address_noise=False):

@@ -35,8 +35,8 @@ if __name__ == "__main__":
         audio, emg = pickle.load(f)
 
     fs = 600.
-    lowcut = 59.
-    highcut = 61.
+    lowcut = 49.
+    highcut = 51.
 
     signal = emg["emg1"]
     signal2 = add_noise(signal, show_plot=False)
