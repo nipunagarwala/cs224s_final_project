@@ -213,7 +213,6 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
 
                     should_train_report = (global_step % Config.steps_per_train_report == 0)
                     should_dev_report = (global_step % Config.steps_per_dev_report == 0)
-                    should_test_report = (global_step % Config.steps_per_test_report == 0) if Config.steps_per_test_report else 25
                     should_checkpoint = (global_step % Config.steps_per_checkpoint == 0)
                     
                     # Monitor training -- training performance
