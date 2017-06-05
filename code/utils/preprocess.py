@@ -387,8 +387,9 @@ def extract_features(pkl_filename, feature_type, should_subset=False, should_add
     else:
         raise RuntimeError("Invalid feature type specified")
 
-def extract_all_features(directory, feature_type, session_type=None,
-    le=None, dummies=None, dummy_train=None, scaler=None, should_augment=False, lda=None):
+def extract_all_features(directory, feature_type, session_type=None, 
+    le=None, dummies=None, dummy_train=None, 
+    use_scaler=True, scaler=None, should_augment=False, lda=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
