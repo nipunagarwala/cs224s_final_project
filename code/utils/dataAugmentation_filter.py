@@ -11,20 +11,15 @@ import matplotlib.pyplot as plt
 
 # Filters out 60 Hz noise
 
-# Get some data to play with
-#with open("data/dev/002_001_0317.pkl", "rb") as f:
-with open("data/train/002_001_0100.pkl", "rb") as f:
-    audio, emg = pickle.load(f)
-
-
-def butter_bandstop(lowcut, highcut, fs, order=2):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='bandstop')
-    return b, a
 
 def butter_bandstop_filter(data, lowcut, highcut, fs, order=2):
+    def butter_bandstop(lowcut, highcut, fs, order=2):
+        nyq = 0.5 * fs
+        low = lowcut / nyq
+        high = highcut / nyq
+        b, a = butter(order, [low, high], btype='bandstop')
+        return b, a
+        
     b, a = butter_bandstop(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
     return y
@@ -34,6 +29,11 @@ def butter_bandstop_filter(data, lowcut, highcut, fs, order=2):
 
 
 if __name__ == "__main__":
+    # Get some data to play with
+    #with open("data/dev/002_001_0317.pkl", "rb") as f:
+    with open("data/train/002_001_0100.pkl", "rb") as f:
+        audio, emg = pickle.load(f)
+
     fs = 600.
     lowcut = 59.
     highcut = 61.
