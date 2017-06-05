@@ -173,7 +173,7 @@ def create_model(args, session, restore, num_features, alphabet_size):
     return model
 
 
-def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, samples_de, 
+def run_epoch(args, session, model, samples_tr, sample_lens_tr, transcripts_tr, samples_de, 
                 sample_lens_de, transcripts_de, train_writer,
                 dev_writer, label_encoder, cur_dev_iter, cur_epoch, mode=None):
     epoch_start = time.time()
@@ -238,8 +238,9 @@ def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, sample
                                         label_encoder)
 
             # Tensorboard -- training
-            # train_writer.add_summary(train_summary, global_step)   
-            train_writer.flush()
+            if args.model != 'shared_emg':
+                train_writer.add_summary(train_summary, global_step)   
+                train_writer.flush()
 
 
         # Monitor training -- dev performance
@@ -278,8 +279,9 @@ def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, sample
             dev_writer.add_summary(dev_wer_summary, global_step)
 
             # Tensorboard -- dev results
-            dev_writer.add_summary(dev_summary, global_step)
-            dev_writer.flush()
+            if args.model != 'shared_emg':
+                dev_writer.add_summary(dev_summary, global_step)
+                dev_writer.flush()
             
             # Increment dev_iter
             dev_iter += 1
@@ -291,7 +293,7 @@ def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, sample
             # Checkpoints
             checkpoint_path = os.path.join(Config.checkpoint_dir, "checkpoint.ckpt")
             model.saver.save(session, checkpoint_path, 
-                                    global_step=model.global_step)
+                                    global_step=model.get_global_step(mode))
     return dev_iter
 
 
@@ -316,17 +318,17 @@ def train_shared_emg_model(args, session, train_writer, dev_writer):
 
     for cur_epoch in range(Config.num_epochs):
 
-        dev_iter_audible = run_epoch(session, model, samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible,
+        dev_iter_audible = run_epoch(args, session, model, samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible,
                        data_de_audible, lens_de_audible,transcripts_de_audible, train_writer, 
                        dev_writer, label_encoder_comp, dev_iter_audible, cur_epoch, mode='audible')
         print("Complete Audible Epoch {0}".format(cur_epoch))
 
-        dev_iter_whisp = run_epoch(session, model, samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp ,
+        dev_iter_whisp = run_epoch(args, session, model, samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp ,
                         data_de_whisp, lens_de_whisp, transcripts_de_whisp, train_writer, 
                         dev_writer, label_encoder_comp, dev_iter_whisp,cur_epoch, mode='whisp')
         print("Complete Whispered Epoch {0}".format(cur_epoch))
 
-        dev_iter_silent = run_epoch(session, model, samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent ,
+        dev_iter_silent = run_epoch(args, session, model, samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent ,
                         data_de_silent, lens_de_silent, transcripts_de_silent, train_writer, 
                         dev_writer, label_encoder_comp, dev_iter_silent,cur_epoch, mode='silent')
         print("Complete Silent Epoch {0}".format(cur_epoch))
@@ -348,7 +350,7 @@ def train_simple_emg_model(args, session, train_writer, dev_writer):
                 samples_tr[-1].shape[1], len(label_encoder.classes_)+1)
     for cur_epoch in range(Config.num_epochs):
 
-        dev_iter = run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr ,
+        dev_iter = run_epoch(args, session, model, samples_tr, sample_lens_tr, transcripts_tr ,
                         data_de, lens_de, transcripts_de,  train_writer, dev_writer, label_encoder,
                         dev_iter, cur_epoch, mode=None)
 

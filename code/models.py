@@ -461,33 +461,33 @@ class MultiSharedEmgNN(object):
 
     def test_one_audible_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_audible_feed_dict(input_batch, target_batch, seq_batch)
-        batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.audible_loss, 
+        batch_cost, wer, beam_decoded, beam_probs = session.run([self.audible_loss, 
                                                 self.audible_wer, 
-                                                self.merged_summary_op,
+                                                # self.merged_summary_op,
                                                 self.audible_decoded_seq,
                                                 self.audible_decoded_probs], 
                                                 feed_dict)
-        return batch_cost, wer, summary, beam_decoded, beam_probs
+        return batch_cost, wer, None, beam_decoded, beam_probs
 
     def test_one_whisp_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_whisp_feed_dict(input_batch, target_batch, seq_batch)
-        batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.whisp_loss, 
+        batch_cost, wer, beam_decoded, beam_probs = session.run([self.whisp_loss, 
                                                 self.whisp_wer, 
-                                                self.merged_summary_op,
+                                                # self.merged_summary_op,
                                                 self.whisp_decoded_seq,
                                                 self.whisp_decoded_probs], 
                                                 feed_dict)
-        return batch_cost, wer, summary, beam_decoded, beam_probs
+        return batch_cost, wer, None, beam_decoded, beam_probs
 
     def test_one_silent_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_silent_feed_dict(input_batch, target_batch, seq_batch)
-        batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.silent_loss, 
+        batch_cost, wer, beam_decoded, beam_probs = session.run([self.silent_loss, 
                                                 self.silent_wer, 
-                                                self.merged_summary_op,
+                                                # self.merged_summary_op,
                                                 self.silent_decoded_seq,
                                                 self.silent_decoded_probs], 
                                                 feed_dict)
-        return batch_cost, wer, summary, beam_decoded, beam_probs
+        return batch_cost, wer, None, beam_decoded, beam_probs
 
     def test_one_batch(self, session, input_batch, target_batch, seq_batch, mode):
         if mode == 'audible':
