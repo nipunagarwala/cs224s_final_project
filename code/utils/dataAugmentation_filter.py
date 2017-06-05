@@ -2,7 +2,6 @@ import pickle
 
 import numpy as np
 from scipy.signal import butter, lfilter
-from scipy.fftpack import fft
 
 from dataAugmentation_additive import add_noise
 

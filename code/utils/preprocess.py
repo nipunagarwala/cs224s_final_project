@@ -14,6 +14,7 @@ from itertools import chain
 from collections import Counter
 from sklearn import preprocessing
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from scipy.signal import butter, lfilter
 
 EMG_F_SAMPLE = 600.0
 # AUDIO_F_SAMPLE = 16e3
@@ -299,11 +300,10 @@ def add_noise(emg):
 
     # Sampling
     # 1 second of data requires 600 frames.  And 600 fps is 600 Hz, sampling rate of EMG.
-    fs = 600 
-    Ts = 1/fs
+    Ts = 1/EMG_F_SAMPLE
 
     # Time vector
-    t = np.arange(0, len(emg)/fs, Ts) # each unit of t is a second
+    t = np.arange(0, len(emg)/EMG_F_SAMPLE, Ts) # each unit of t is a second
 
     # Noise
     randAmplitudeScale = np.random.random()*0.1
@@ -358,7 +358,7 @@ def remove_noise(emg):
     
     # Remove noise from signal
     for channel in ["emg1", "emg2", "emg3", "emg4", "emg5", "emg6"]:
-        emg[channel] = butter_bandstop_filter(emg[channel], 49., 51., 600., order=2)
+        emg[channel] = butter_bandstop_filter(emg[channel], 49., 51., EMG_F_SAMPLE, order=2)
     return emg
 
 def extract_features(pkl_filename, feature_type, should_subset=False, should_address_noise=False):
