@@ -40,56 +40,57 @@ def add_noise(emg_signal, show_plot=True):
     signalNoise = emg_signal + noise
     
     # Plot an example of augmentation
-    DATA_XRANGE = list(range(200))
-    DATA_YRANGE = (-32768, 32767) # 2-byte signed integer, as per corpus spec
+    if show_plot:
+        DATA_XRANGE = list(range(200))
+        DATA_YRANGE = (-32768, 32767) # 2-byte signed integer, as per corpus spec
 
-    plt.subplots(nrows=3, ncols=1)
-    plt.tight_layout()
+        plt.subplots(nrows=3, ncols=1)
+        plt.tight_layout()
 
-    p = plt.subplot(3, 1, 1)
-    plt.title("Data Augmentation: Additive Noise")
-    plt.plot(t[DATA_XRANGE], signal[DATA_XRANGE]) 
-    plt.ylim(DATA_YRANGE)
-    plt.text(.5,.98,'EMG Signal',
-        horizontalalignment='center',
-        verticalalignment='top',
-        transform=plt.gca().transAxes)
-    plt.ylabel("Amplitude")
-    plt.gca().yaxis.set_major_locator(plt.NullLocator())
+        plt.subplot(3, 1, 1)
+        plt.title("Data Augmentation: Additive Noise")
+        plt.plot(t[DATA_XRANGE], signal[DATA_XRANGE]) 
+        plt.ylim(DATA_YRANGE)
+        plt.text(.5,.98,'EMG Signal',
+            horizontalalignment='center',
+            verticalalignment='top',
+            transform=plt.gca().transAxes)
+        plt.ylabel("Amplitude")
+        plt.gca().yaxis.set_major_locator(plt.NullLocator())
 
-    plt.subplot(3, 1, 2)
-    plt.plot(t[DATA_XRANGE], noise[DATA_XRANGE])
-    plt.ylim(DATA_YRANGE)
-    plt.text(.5,.98,"60 Hz Noise\n(Amplitude of %4.2fx Signal Range, Offset of %4.2f sec)" %
-        (randAmplitudeScale, randOffset),
-        horizontalalignment='center',
-        verticalalignment='top',
-        transform=plt.gca().transAxes)
-    plt.ylabel("Amplitude")
-    plt.gca().yaxis.set_major_locator(plt.NullLocator())
+        plt.subplot(3, 1, 2)
+        plt.plot(t[DATA_XRANGE], noise[DATA_XRANGE])
+        plt.ylim(DATA_YRANGE)
+        plt.text(.5,.98,"60 Hz Noise\n(Amplitude of %4.2fx Signal Range, Offset of %4.2f sec)" %
+            (randAmplitudeScale, randOffset),
+            horizontalalignment='center',
+            verticalalignment='top',
+            transform=plt.gca().transAxes)
+        plt.ylabel("Amplitude")
+        plt.gca().yaxis.set_major_locator(plt.NullLocator())
 
-    plt.subplot(3, 1, 3)
-    plt.plot(t[DATA_XRANGE], signalNoise[DATA_XRANGE])
-    plt.ylim(DATA_YRANGE)
-    plt.text(.5,.98,'Noisy Signal',
-        horizontalalignment='center',
-        verticalalignment='top',
-        transform=plt.gca().transAxes)
-    plt.xlabel("Time (seconds)")
-    plt.ylabel("Amplitude")
-    plt.gca().yaxis.set_major_locator(plt.NullLocator())
-        
-    plt.show()
+        plt.subplot(3, 1, 3)
+        plt.plot(t[DATA_XRANGE], signalNoise[DATA_XRANGE])
+        plt.ylim(DATA_YRANGE)
+        plt.text(.5,.98,'Noisy Signal',
+            horizontalalignment='center',
+            verticalalignment='top',
+            transform=plt.gca().transAxes)
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Amplitude")
+        plt.gca().yaxis.set_major_locator(plt.NullLocator())
+            
+        plt.show()
 
     return signalNoise
 
 
-# Get some data to play with
-with open("data/train/002_001_0100.pkl", "rb") as f:
-    audio, emg = pickle.load(f)
 
+if __name__ == "__main__":
+    # Get some data to play with
+    with open("data/train/002_001_0100.pkl", "rb") as f:
+        audio, emg = pickle.load(f)
 
-signal = emg["emg1"]
-signalNoise = add_noise(signal)
-
+    signal = emg["emg1"]
+    signalNoise = add_noise(signal)
 

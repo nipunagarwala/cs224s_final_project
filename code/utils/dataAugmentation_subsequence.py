@@ -5,12 +5,6 @@ import numpy as np
 
 # Implements subsequences (selecting on changes in word-level data)
 
-# Get some data to play with
-#with open("data/dev/002_001_0317.pkl", "rb") as f:
-with open("data/train/002_001_0100.pkl", "rb") as f:
-    audio, emg = pickle.load(f)
-
-
 def select_subsequence(emg):
     # Get locations of each word
     new_word_begins = np.hstack([[0], np.where(emg["word"][1:] != emg["word"][:-1])[0] + 1])
@@ -33,13 +27,18 @@ def select_subsequence(emg):
     return emg, transcript
 
  
-str = []
-for _ in range(100):
-    e, t = select_subsequence(emg)
-    str.append(t)
+    
+if __name__ == "__main__":
+    # Get some data to play with
+    #with open("data/dev/002_001_0317.pkl", "rb") as f:
+    with open("data/train/002_001_0100.pkl", "rb") as f:
+        audio, emg = pickle.load(f)
 
-str.sort()
-for i in str:
-    print(i)
-    
-    
+    str = []
+    for _ in range(100):
+        e, t = select_subsequence(emg)
+        str.append(t)
+
+    str.sort()
+    for i in str:
+        print(i)
