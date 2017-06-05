@@ -20,7 +20,7 @@ import tensorflow as tf
 from time import gmtime, strftime
 
 from code.config import Config
-from code.models import SimpleEmgNN, MultiModalEmgNN
+from code.models import SimpleEmgNN, MultiSharedEmgNN
 from code.utils.preprocess import extract_all_features
 from code.utils.utils import make_batches, compute_wer, compute_cer
 from code.utils.spell import correction
@@ -143,15 +143,17 @@ def print_details_on_example(example_to_print, split,
             print("           %s" % (ex_str_corr))
     print()
     
-def create_model(session, restore, num_features, alphabet_size):
+def create_model(args, session, restore, num_features, alphabet_size):
     """
     Returns a model, which has been initialized in `session`.
     Re-opens saved model if so instructed; otherwise creates 
     a new model from scratch.
     """
     print("Creating model")
-    model = SimpleEmgNN(Config, num_features, alphabet_size)
-    # model = MultiModalEmgNN(Config, Config, Config, Config, num_features, alphabet_size)
+    if args.model == 'simple_emg':
+        model = SimpleEmgNN(Config, num_features, alphabet_size)
+    elif args.model == 'shared_emg':
+        model = MultiSharedEmgNN(Config, Config, Config, Config, num_features, alphabet_size)
     
     ckpt = tf.train.latest_checkpoint(Config.checkpoint_dir)
     if restore:
@@ -170,13 +172,208 @@ def create_model(session, restore, num_features, alphabet_size):
             
     return model
 
-def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
-                      samples_de, sample_lens_de, transcripts_de):  
+
+def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, samples_de, 
+                sample_lens_de, transcripts_de, train_writer,
+                dev_writer, cur_dev_iter, mode=None):
+    epoch_start = time.time()
+    epoch_losses = []
+    epoch_weres = []
+    dev_iter = cur_dev_iter
+
+    batched_samples, batched_transcripts, \
+                batched_sample_lens = make_batches(samples_tr, 
+                                                    sample_lens_tr, 
+                                                    transcripts_tr, 
+                                                    Config.batch_size)
+
+    for iter, cur_batch_iter in enumerate(range(len(batched_samples))):
+                    # Do training step
+        batch_start = time.time()
+        batch_cost, batch_wer, train_summary, beam_decoded, beam_probs = model.train_one_batch(
+                                        session, 
+                                        batched_samples[cur_batch_iter], 
+                                        batched_transcripts[cur_batch_iter], 
+                                        batched_sample_lens[cur_batch_iter], mode=mode)
+
+        global_step = model.get_global_step(mode).eval()
+
+        should_train_report = (global_step % Config.steps_per_train_report == 0)
+        should_dev_report = (global_step % Config.steps_per_dev_report == 0)
+        should_checkpoint = (global_step % Config.steps_per_checkpoint == 0)
+        
+        # Monitor training -- training performance
+        if should_train_report:
+            # Print training information
+            batch_end = time.time()
+            batch_time = batch_end - batch_start
+            epoch_losses.append(batch_cost)
+            epoch_weres.append(batch_wer)
+            log = "Epoch {}/{}, overall step {}, batch {}/{} in epoch"
+            print(log.format(cur_epoch+1, 
+                             Config.num_epochs,
+                             global_step,
+                             iter+1,
+                             len(batched_samples)))
+            log = "    batch cost = {:.3f}, wer = {:.3f}, time = {:.3f}"
+            print(log.format(batch_cost,
+                             batch_wer,
+                             batch_time))
+            log = "    overall cost = {:.3f}+/-{:.3f}, wer = {:.3f}+/-{:.3f}, est epoch time = {:.3f} hrs (95%CI)"
+            print(log.format(np.mean(epoch_losses),
+                             2*scipy.stats.sem(epoch_losses),
+                             np.mean(epoch_weres),
+                             2*scipy.stats.sem(epoch_weres),
+                             ((Config.num_epochs / len(batched_samples)) * batch_time) / 3600.
+                             ))
+            # Watch performance
+            # TODO print this performance information to disk every n batches 
+            # (e.g., 100) so we have a qualitative trace for performance over time
+            print_details_on_example(0, "train", batched_samples[cur_batch_iter],
+                                        batched_sample_lens[cur_batch_iter],
+                                        batched_transcripts[cur_batch_iter],
+                                        beam_decoded,
+                                        beam_probs,
+                                        label_encoder)
+
+            # Tensorboard -- training
+            train_writer.add_summary(train_summary, global_step)   
+            train_writer.flush()
+
+
+        # Monitor training -- dev performance
+        if should_dev_report:
+            print("--------")
+            if dev_iter >= len(batched_samples_dev):
+                dev_iter = 0
+                batched_samples_dev, batched_transcripts_dev, batched_sample_lens_dev = make_batches(
+                                                        samples_de, 
+                                                        sample_lens_de, 
+                                                        transcripts_de, 
+                                                        Config.batch_size)
+            
+            dev_cost, dev_wer, dev_summary, dev_beam_decoded, dev_beam_probs = model.test_one_batch(
+                                    session, 
+                                    batched_samples_dev[dev_iter], 
+                                    batched_transcripts_dev[dev_iter], 
+                                    batched_sample_lens_dev[dev_iter], mode=mode)
+            log = "DEV: batch cost = {:.3f}, wer = {:.3f}"
+            print(log.format(dev_cost, dev_wer))
+            
+            # Watch performance
+            print_details_on_example(0, "dev", batched_samples_dev[dev_iter],
+                                        batched_sample_lens_dev[dev_iter],
+                                        batched_transcripts_dev[dev_iter],
+                                        dev_beam_decoded,
+                                        dev_beam_probs,
+                                        label_encoder)
+                                 
+            print("Computing WER for batch")
+            true_transcripts = generate_all_str(batched_transcripts_dev[dev_iter], label_encoder)
+            decoded_transcripts = generate_all_str(dev_beam_decoded[0], label_encoder)
+            dev_wer = np.mean(compute_wer(true_transcripts, decoded_transcripts))
+            print("Word-level WER of batch =", dev_wer)
+            dev_wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=dev_wer)])
+            dev_writer.add_summary(dev_wer_summary, global_step)
+
+            # Tensorboard -- dev results
+            dev_writer.add_summary(dev_summary, global_step)
+            dev_writer.flush()
+            
+            # Increment dev_iter
+            dev_iter += 1
+            print("--------")
+            
+        
+        # Save checkpoints as per configuration
+        if should_checkpoint:
+            # Checkpoints
+            checkpoint_path = os.path.join(Config.checkpoint_dir, "checkpoint.ckpt")
+            model.saver.save(session, checkpoint_path, 
+                                    global_step=model.global_step)
+    return dev_iter
+
+
+def train_shared_emg_model(args, session, train_writer, dev_writer):
+    # Perform the training
+    dev_iter_audible = 0
+    dev_iter_whisp = 0
+    dev_iter_silent = 0
+
+    # Get the training data
+    samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible, label_encoder_audible,\
+            dummy_train, _, _, scaler = prep_data(args, 
+        Config.train_path, Config.feature_type, "audible", None, Config.dummies, None, Config.use_scaler, None)
+    # Get the dev data using the same label_encoder
+    data_de_audible, lens_de_audible, transcripts_de_audible, _, _ , _, _, _ = prep_data(args, 
+            Config.dev_path, Config.feature_type, "audible", label_encoder_audible, Config.dummies, dummy_train,
+            Config.use_scaler, scaler)
+
+    # Get the training data
+    samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp, label_encoder_whisp, \
+            dummy_train, _, _, scaler = prep_data(args, Config.train_path, Config.feature_type, 
+                    "whispered", None, Config.dummies, None, Config.use_scaler, None)
+
+    # Get the dev data using the same label_encoder
+    data_de_whisp, lens_de_whisp, transcripts_de_whisp, _, _ , _, _, _ = prep_data(args, 
+            Config.dev_path, Config.feature_type, "whispered", label_encoder_whisp, Config.dummies, dummy_train,
+            Config.use_scaler, scaler)
+
+    # Get the training data
+    samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent, label_encoder_silent, \
+            dummy_train, _, _, scaler = prep_data(args, Config.train_path, Config.feature_type,
+                     "silent", None, Config.dummies, None, Config.use_scaler, None)
+    # Get the dev data using the same label_encoder
+    data_de_silent, lens_de_silent, transcripts_de_silent, _, _ , _, _, _ = prep_data(args, 
+            Config.dev_path, Config.feature_type, "silent", label_encoder_silent, Config.dummies, dummy_train,
+            Config.use_scaler, scaler)
+
+    # Create or restore model
+    # TO BE FIXED (TODO): Replace label_encoder_audible with the actual collective label_encoder 
+    max_label_encoder_len = np.max([len(label_encoder_audible.classes_),len(label_encoder_whisp.classes_),
+                        len(label_encoder_silent.classes_)])
+
+    model = create_model(args, session, args.restore, 
+                samples_tr_audible[-1], max_label_encoder_len+1)
+
+    for cur_epoch in range(Config.num_epochs):
+        dev_iter_audible = run_epoch(session, model, samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible,
+                       data_de_audible, lens_de_audible,transcripts_de_audible, train_writer, 
+                       dev_writer, dev_iter_audible, mode='audible')
+        dev_iter_whisp = run_epoch(session, model, samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp ,
+                        data_de_whisp, lens_de_whisp, transcripts_de_whisp, train_writer, 
+                        dev_writer, dev_iter_whisp, mode='whisp')
+        dev_iter_silent = run_epoch(session, model, samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent ,
+                        data_de_silent, lens_de_silent, transcripts_de_silent, train_writer, 
+                        dev_writer, dev_iter_silent, mode='silent')
+
+
+def train_simple_emg_model(args, session, train_writer, dev_writer):
+    # Perform the training
+    dev_iter = 0
+    batched_samples_dev = []
+    # Get the training data
+    samples_tr, sample_lens_tr, transcripts_tr, label_encoder, dummy_train, _, _, scaler = prep_data(args, 
+        Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, Config.use_scaler, None)
+    # Get the dev data using the same label_encoder
+    data_de, lens_de, transcripts_de, _, _ , _, _, _ = prep_data(args, 
+            Config.dev_path, Config.feature_type, Config.mode, label_encoder, Config.dummies, dummy_train,
+            Config.use_scaler, scaler)
+
+    # Create or restore model
+    model = create_model(args, session, args.restore, 
+                samples_tr.shape[-1], len(label_encoder.classes_)+1)
+    for cur_epoch in range(Config.num_epochs):
+
+        dev_iter = run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr ,
+                        data_de, lens_de, transcripts_de, train_writer, dev_writer, dev_iter, mode=None)
+
+
+
+def train_model(args):  
+
     with tf.Graph().as_default():
         with tf.Session() as session:
-            # Create or restore model
-            model = create_model(session, args.restore, 
-                        samples_tr.shape[-1], len(label_encoder.classes_)+1)
             
             # Create a tensorboard writer for this session
             start_time = strftime("%Y_%m_%d_%H_%M_%S", gmtime())
@@ -186,124 +383,13 @@ def train_model(args, samples_tr, sample_lens_tr, transcripts_tr, label_encoder,
                     start_time , "dev")
             train_writer = tf.summary.FileWriter(logs_path_train, session.graph)
             dev_writer = tf.summary.FileWriter(logs_path_dev, session.graph)
+
+            if args.model == 'simple_emg':
+                train_simple_emg_model(args, session, train_writer, dev_writer)
+            elif args.model == 'shared_emg':
+                train_shared_emg_model(args, session, train_writer, dev_writer)
+
             
-            # Perform the training
-            dev_iter = 0
-            batched_samples_dev = []
-            for cur_epoch in range(Config.num_epochs):
-                batched_samples, batched_transcripts, batched_sample_lens = make_batches(
-                                                                    samples_tr, 
-                                                                    sample_lens_tr, 
-                                                                    transcripts_tr, 
-                                                                    Config.batch_size)
-
-                epoch_start = time.time()
-                epoch_losses = []
-                epoch_weres = []
-                for iter, cur_batch_iter in enumerate(range(len(batched_samples))):
-                    # Do training step
-                    batch_start = time.time()
-                    batch_cost, batch_wer, train_summary, beam_decoded, beam_probs = model.train_one_batch(
-                                                    session, 
-                                                    batched_samples[cur_batch_iter], 
-                                                    batched_transcripts[cur_batch_iter], 
-                                                    batched_sample_lens[cur_batch_iter])
-
-                    global_step = model.global_step.eval()
-
-                    should_train_report = (global_step % Config.steps_per_train_report == 0)
-                    should_dev_report = (global_step % Config.steps_per_dev_report == 0)
-                    should_checkpoint = (global_step % Config.steps_per_checkpoint == 0)
-                    
-                    # Monitor training -- training performance
-                    if should_train_report:
-                        # Print training information
-                        batch_end = time.time()
-                        batch_time = batch_end - batch_start
-                        epoch_losses.append(batch_cost)
-                        epoch_weres.append(batch_wer)
-                        log = "Epoch {}/{}, overall step {}, batch {}/{} in epoch"
-                        print(log.format(cur_epoch+1, 
-                                         Config.num_epochs,
-                                         global_step,
-                                         iter+1,
-                                         len(batched_samples)))
-                        log = "    batch cost = {:.3f}, wer = {:.3f}, time = {:.3f}"
-                        print(log.format(batch_cost,
-                                         batch_wer,
-                                         batch_time))
-                        log = "    overall cost = {:.3f}+/-{:.3f}, wer = {:.3f}+/-{:.3f}, est epoch time = {:.3f} hrs (95%CI)"
-                        print(log.format(np.mean(epoch_losses),
-                                         2*scipy.stats.sem(epoch_losses),
-                                         np.mean(epoch_weres),
-                                         2*scipy.stats.sem(epoch_weres),
-                                         ((Config.num_epochs / len(batched_samples)) * batch_time) / 3600.
-                                         ))
-                        # Watch performance
-                        # TODO print this performance information to disk every n batches 
-                        # (e.g., 100) so we have a qualitative trace for performance over time
-                        print_details_on_example(0, "train", batched_samples[cur_batch_iter],
-                                                    batched_sample_lens[cur_batch_iter],
-                                                    batched_transcripts[cur_batch_iter],
-                                                    beam_decoded,
-                                                    beam_probs,
-                                                    label_encoder)
-
-                        # Tensorboard -- training
-                        train_writer.add_summary(train_summary, global_step)   
-                        train_writer.flush()
-          
-          
-                    # Monitor training -- dev performance
-                    if should_dev_report:
-                        print("--------")
-                        if dev_iter >= len(batched_samples_dev):
-                            dev_iter = 0
-                            batched_samples_dev, batched_transcripts_dev, batched_sample_lens_dev = make_batches(
-                                                                    samples_de, 
-                                                                    sample_lens_de, 
-                                                                    transcripts_de, 
-                                                                    Config.batch_size)
-                        
-                        dev_cost, dev_wer, dev_summary, dev_beam_decoded, dev_beam_probs = model.test_one_batch(
-                                                session, 
-                                                batched_samples_dev[dev_iter], 
-                                                batched_transcripts_dev[dev_iter], 
-                                                batched_sample_lens_dev[dev_iter])
-                        log = "DEV: batch cost = {:.3f}, wer = {:.3f}"
-                        print(log.format(dev_cost, dev_wer))
-                        
-                        # Watch performance
-                        print_details_on_example(0, "dev", batched_samples_dev[dev_iter],
-                                                    batched_sample_lens_dev[dev_iter],
-                                                    batched_transcripts_dev[dev_iter],
-                                                    dev_beam_decoded,
-                                                    dev_beam_probs,
-                                                    label_encoder)
-                                             
-                        print("Computing WER for batch")
-                        true_transcripts = generate_all_str(batched_transcripts_dev[dev_iter], label_encoder)
-                        decoded_transcripts = generate_all_str(dev_beam_decoded[0], label_encoder)
-                        dev_wer = np.mean(compute_wer(true_transcripts, decoded_transcripts))
-                        print("Word-level WER of batch =", dev_wer)
-                        dev_wer_summary = tf.Summary(value=[tf.Summary.Value(tag="word_wer", simple_value=dev_wer)])
-                        dev_writer.add_summary(dev_wer_summary, global_step)
-
-                        # Tensorboard -- dev results
-                        dev_writer.add_summary(dev_summary, global_step)
-                        dev_writer.flush()
-                        
-                        # Increment dev_iter
-                        dev_iter += 1
-                        print("--------")
-                        
-                    
-                    # Save checkpoints as per configuration
-                    if should_checkpoint:
-                        # Checkpoints
-                        checkpoint_path = os.path.join(Config.checkpoint_dir, "checkpoint.ckpt")
-                        model.saver.save(session, checkpoint_path, 
-                                                global_step=model.global_step)
 
 
 def test_model(args, samples, sample_lens, transcripts, modes, sessions, label_encoder):
@@ -420,6 +506,7 @@ def parse_commandline():
             restore: True or False
     """
     parser = argparse.ArgumentParser()
+    parser.add_argument('--model', default='simple_emg', choices=['simple_emg', 'shared_emg'])
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
     parser.add_argument('--restore', nargs='?', default=False, type=bool, help="Whether to restore from checkpoint directory specified in Config (default is false; overriden to be True whenever phase is test)")
     args = parser.parse_args()
@@ -474,20 +561,13 @@ def main(args):
     # perhaps in json rather than in code 
     if not os.path.exists(Config.checkpoint_dir):
         os.makedirs(Config.checkpoint_dir)
-    if os.path.isfile(os.path.join(Config.checkpoint_dir, "config.py")):
-        raise RuntimeError("There is already a configuration file in directory '%s' -- please restore it by hand to code/config.py or delete it" % Config.checkpoint_dir)
+    # if os.path.isfile(os.path.join(Config.checkpoint_dir, "config.py")):
+    #     raise RuntimeError("There is already a configuration file in directory '%s' -- please restore it by hand to code/config.py or delete it" % Config.checkpoint_dir)
     shutil.copy("code/config.py", Config.checkpoint_dir)
     
     if args.phase == 'train':
-        # Get the training data
-        data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _, scaler = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, Config.use_scaler, None)
-        # Get the dev data using the same label_encoder
-        data_de, lens_de, transcripts_de, _, _ , _, _, _ = prep_data(args, 
-                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train, Config.use_scaler, scaler)
         # Run model training         
-        train_model(args, data_tr, lens_tr, transcripts_tr, le,
-                          data_de, lens_de, transcripts_de)
+        train_model(args)
     
     elif args.phase == 'test':
         args.restore = True

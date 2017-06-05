@@ -121,7 +121,7 @@ class SimpleEmgNN(object):
         }
         return feed_dict
 
-    def train_one_batch(self, session, input_batch, target_batch, seq_batch):
+    def train_one_batch(self, session, input_batch, target_batch, seq_batch, mode=None):
         feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
         _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.train_op, 
                                             self.loss, 
@@ -137,7 +137,7 @@ class SimpleEmgNN(object):
         return batch_cost, wer, summary, beam_decoded, beam_probs
 
 
-    def test_one_batch(self, session, input_batch, target_batch, seq_batch):
+    def test_one_batch(self, session, input_batch, target_batch, seq_batch, mode=None):
         feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
         batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.loss, 
                                                 self.wer, 
@@ -149,6 +149,10 @@ class SimpleEmgNN(object):
 
     def get_config(self):
         return self.config
+
+    def get_global_step(self, mode=None):
+        return self.global_step
+        
 
 
 
@@ -203,7 +207,9 @@ class MultiSharedEmgNN(object):
         else:
             raise ValueError('Input correct cell type')
 
-        self.global_step = tf.contrib.framework.get_or_create_global_step() 
+        self.global_step_audible = tf.contrib.framework.get_or_create_global_step() 
+        self.global_step_whisp = tf.contrib.framework.get_or_create_global_step()
+        self.global_step_silent = tf.contrib.framework.get_or_create_global_step()
       
         self.add_placeholders()
         self.build_model()
@@ -321,13 +327,13 @@ class MultiSharedEmgNN(object):
                 "silent_loss", self.silent_scope, self.shared_scope)
 
 
-    def add_model_optimizer_op(self, loss, config, model_scope, shared_scope):
+    def add_model_optimizer_op(self, loss, config, model_scope, shared_scope, global_step):
         tvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=model_scope)
         tvars += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=shared_scope)
 
         grads, _ = tf.clip_by_global_norm(tf.gradients(loss, tvars), config.max_norm)
         optimizer = tf.train.AdamOptimizer(config.learning_rate)
-        train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
+        train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=global_step)
 
         return train_op
 
@@ -335,11 +341,11 @@ class MultiSharedEmgNN(object):
     def add_optimizer_op(self):
 
         self.audible_train_op = self.add_model_optimizer_op(self.audible_loss, self.config_audio, 
-                                    self.audible_scope , self.shared_scope)
+                                    self.audible_scope , self.shared_scope, self.global_step_audible)
         self.whisp_train_op = self.add_model_optimizer_op(self.whisp_loss, self.config_whisp, 
-                                    self.whisp_scope , self.shared_scope)
+                                    self.whisp_scope , self.shared_scope, self.global_step_whisp)
         self.silent_train_op = self.add_model_optimizer_op(self.silent_loss, self.config_silent, 
-                                    self.silent_scope , self.shared_scope)
+                                    self.silent_scope , self.shared_scope, self.global_step_silent)
 
     def add_model_results_op(self,logits, seq_len, config,targets, summary_name):
         logits = tf.transpose(logits,perm=[1,0,2])
@@ -389,7 +395,7 @@ class MultiSharedEmgNN(object):
         _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.audible_train_op, 
                                             self.audible_loss, 
                                             self.audible_wer, 
-                                            self.merged_summary_op,
+                                            # self.merged_summary_op,
                                             self.audible_decoded_seq,
                                             self.audible_decoded_probs], 
                                             feed_dict)
@@ -404,7 +410,7 @@ class MultiSharedEmgNN(object):
         _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.whisp_train_op, 
                                             self.whisp_loss, 
                                             self.whisp_wer, 
-                                            self.merged_summary_op,
+                                            # self.merged_summary_op,
                                             self.whisp_decoded_seq,
                                             self.whisp_decoded_probs], 
                                             feed_dict)
@@ -419,7 +425,7 @@ class MultiSharedEmgNN(object):
         _, batch_cost, wer, summary, beam_decoded, beam_probs = session.run([self.silent_train_op, 
                                             self.silent_loss, 
                                             self.silent_wer, 
-                                            self.merged_summary_op,
+                                            # self.merged_summary_op,
                                             self.silent_decoded_seq,
                                             self.silent_decoded_probs], 
                                             feed_dict)
@@ -429,6 +435,13 @@ class MultiSharedEmgNN(object):
 
         return batch_cost, wer, summary, beam_decoded, beam_probs
 
+    def train_one_batch(self, session, input_batch, target_batch, seq_batch, mode):
+        if mode == 'audible':
+            return self.train_one_audible_batch(session, input_batch, target_batch, seq_batch)
+        elif mode == 'whisp':
+            return self.train_one_whisp_batch(session, input_batch, target_batch, seq_batch)
+        elif mode == 'silent':
+            return self.train_one_silent_batch(session, input_batch, target_batch, seq_batch)
 
     def test_one_audible_batch(self, session, input_batch, target_batch, seq_batch):
         feed_dict = self.get_feed_dict(input_batch, target_batch, seq_batch)
@@ -460,106 +473,23 @@ class MultiSharedEmgNN(object):
                                                 feed_dict)
         return batch_cost, wer, summary, beam_decoded, beam_probs
 
+    def test_one_batch(self, session, input_batch, target_batch, seq_batch, mode):
+        if mode == 'audible':
+            return self.test_one_audible_batch(session, input_batch, target_batch, seq_batch)
+        elif mode == 'whisp':
+            return self.test_one_whisp_batch(session, input_batch, target_batch, seq_batch)
+        elif mode == 'silent':
+            return self.test_one_silent_batch(session, input_batch, target_batch, seq_batch)
 
-class MultiModalEmgNN(object):
-    def __init__(self, config_audio, config_whisp, config_silent, config_shared, num_features, alphabet_size):
-        self.config_audio = config_audio
-        self.config_whisp = config_whisp
-        self.config_silent = config_silent
-        self.config_shared = config_shared
-        self.audible_scope = 'audible'
-        self.whisp_scope = 'whispered'
-        self.silent_scope = 'silent'
-        self.shared_scope = 'shared'
-        
-        self.num_features = num_features
-        self.alphabet_size = alphabet_size
-               
-        if self.config_audio.cell_type == 'rnn':
-            self.audible_cell = tf.contrib.rnn.RNNCell
-        elif self.config_audio.cell_type == 'gru':
-            self.audible_cell = tf.contrib.rnn.GRUCell
-        elif self.config_audio.cell_type == 'lstm':
-            self.audible_cell = tf.contrib.rnn.LSTMCell
-        else:
-            raise ValueError('Input correct cell type')
-
-        if self.config_whisp.cell_type == 'rnn':
-            self.whisp_cell = tf.contrib.rnn.RNNCell
-        elif self.config_whisp.cell_type == 'gru':
-            self.whisp_cell = tf.contrib.rnn.GRUCell
-        elif self.config_whisp.cell_type == 'lstm':
-            self.whisp_cell = tf.contrib.rnn.LSTMCell
-        else:
-            raise ValueError('Input correct cell type')
-
-        if self.config_silent.cell_type == 'rnn':
-            self.silent_cell = tf.contrib.rnn.RNNCell
-        elif self.config_silent.cell_type == 'gru':
-            self.silent_cell = tf.contrib.rnn.GRUCell
-        elif self.config_silent.cell_type == 'lstm':
-            self.silent_cell = tf.contrib.rnn.LSTMCell
-        else:
-            raise ValueError('Input correct cell type')
-
-        self.global_step = tf.contrib.framework.get_or_create_global_step() 
-      
-        self.add_placeholders()
-        self.build_model()
-        self.add_loss_op()
-        self.add_optimizer_op()
-        self.add_decoder_and_wer_op()
-        self.add_summary_op()
-        
-        # Needs to be last line -- graph must be created before saver is created
-        self.saver = tf.train.Saver(tf.global_variables(), 
-                           keep_checkpoint_every_n_hours=self.config_shared.freq_of_longterm_checkpoint)
-
-    def add_placeholders(self):
-        self.inputs_audio_placeholder = tf.placeholder(tf.float32, 
-                                    shape=(None, None, self.num_features), name='input_audio')
-
-        self.targets_audio_placeholder = tf.sparse_placeholder(tf.int32, name='targets_audio')
-
-        self.seq_lens_audio_placeholder = tf.placeholder(tf.int32, shape=(None), name='seq_len_audio')
+    def get_global_step(self, mode):
+        if mode == 'audible':
+            return self.global_step_audible
+        elif mode == 'whisp':
+            return self.global_step_whisp
+        elif mode == 'silent':
+            return self.global_step_silent
 
 
-        self.inputs_whisp_placeholder = tf.placeholder(tf.float32, 
-                                    shape=(None, None, self.num_features), name='input_whisp')
-
-        self.targets_whisp_placeholder = tf.sparse_placeholder(tf.int32, name='targets_whisp')
-
-        self.seq_lens_whisp_placeholder = tf.placeholder(tf.int32, shape=(None), name='seq_len_whisp')
-
-        self.inputs_silent_placeholder = tf.placeholder(tf.float32, 
-                                    shape=(None, None, self.num_features), name='input_silent')
-
-        self.targets_silent_placeholder = tf.sparse_placeholder(tf.int32, name='targets_silent')
-
-        self.seq_lens_silent_placeholder = tf.placeholder(tf.int32, shape=(None), name='seq_len_audio')
-
-    def build_rnn_model(self, inputs, seq_len, config, model_cell, model_scope):
-        output_model = None
-        state_output = None
-        with tf.variable_scope(model_scope):
-            rnnNet_model = tf.contrib.rnn.MultiRNNCell([model_cell(config.hidden_size) 
-                                              for _ in range(config.num_layers)])
-            output_model, state_output = tf.nn.dynamic_rnn(rnnNet_model, inputs,
-                        sequence_length=seq_len,
-                        dtype=tf.float32)
-
-        flattened_logits = tf.contrib.layers.flatten(output_model)
-        return flattened_logits
 
 
-    def build_model(self):
-        self.audible_logits = self.build_rnn_model(self.inputs_audio_placeholder, self.seq_lens_audio_placeholder, 
-                                self.config_audio,self.audible_cell, self.audible_scope)
-        self.whisp_logits = self.build_rnn_model(self.inputs_whisp_placeholder, self.seq_lens_whisp_placeholder, 
-                                self.config_whisp,self.whisp_cell, self.whisp_scope)
-        self.silent_logits = self.build_rnn_model(self.inputs_silent_placeholder, self.seq_lens_silent_placeholder, 
-                                self.config_silent,self.silent_cell, self.silent_scope)
 
-        combined_outputs = tf.concat([self.audible_logits, self.whisp_logits, self.silent_logits], axis=1)
-
-        with tf.variable_scope(self.shared_scope):
