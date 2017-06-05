@@ -326,13 +326,17 @@ def select_subsequence(emg):
     new_word_begins = np.hstack([[0], np.where(emg["word"][1:] != emg["word"][:-1])[0] + 1])
     #print(emg["word"][new_word_begins])
     
+    if len(new_word_begins) <= 3:
+        transcript = " ".join(emg["word"][new_word_begins]).replace("$", "").strip()
+        return emg, transcript
+    
     # Select a random subsequence -- at least length 1, or at least length 2 if $ at end/begin
     # is included, and guaranteed that begin comes before end
     end_word, start_word = -1, -1
     while (end_word <= start_word or 
            end_word-start_word < 2 or 
            end_word-start_word < 3 and (start_word == 0 or end_word == len(new_word_begins)-1)):
-        start_word = np.random.randint(max(0, len(new_word_begins)-2))
+        start_word = np.random.randint(max(1, len(new_word_begins)-2))
         end_word = np.random.randint(start_word+1, len(new_word_begins))
     
     start_loc = new_word_begins[start_word]

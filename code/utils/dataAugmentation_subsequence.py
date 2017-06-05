@@ -8,8 +8,11 @@ import numpy as np
 def select_subsequence(emg):
     # Get locations of each word
     new_word_begins = np.hstack([[0], np.where(emg["word"][1:] != emg["word"][:-1])[0] + 1])
-    #print(emg["word"][new_word_begins])
     
+    if len(new_word_begins) <= 3:
+        transcript = " ".join(emg["word"][new_word_begins]).replace("$", "").strip()
+        return emg, transcript
+        
     # Select a random subsequence
     end_word, start_word = -1, -1
     while (end_word <= start_word or 
@@ -35,7 +38,7 @@ if __name__ == "__main__":
         audio, emg = pickle.load(f)
 
     str = []
-    for _ in range(100):
+    for _ in range(20):
         e, t = select_subsequence(emg)
         str.append(t)
 
