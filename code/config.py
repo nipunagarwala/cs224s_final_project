@@ -4,10 +4,10 @@ class Config(object):
     ##########################
     # Checkpointing configuration
     ##########################
-    checkpoint_dir = "checkpoints"
-    tensorboard_dir = "tensorboard"
-    tensorboard_prefix = "my_run"
-    steps_per_checkpoint = 25
+    checkpoint_dir = "checkpoints_wandlda"
+    tensorboard_dir = "tensorboard_wandlda"
+    tensorboard_prefix = "all"
+    steps_per_checkpoint = 10
     freq_of_longterm_checkpoint = 0.5     # in hours
     
     ##########################
@@ -40,10 +40,13 @@ class Config(object):
     # What additional dummies to include:
     # None (no dummies), or a list with any of: 
     # ["speakerId", "speakerSess", "gender", "mode"]
-    dummies = None#["speakerId", "speakerSess", "gender", "mode"]
+    dummies = None
     
     # Whether to ensure features have zero-mean and unit variance
-    use_scaler = False
+    use_scaler = True
+
+    # Whether to augment the dataset
+    should_augment = False 
     
     ##########################
     # Model architecture
@@ -52,12 +55,11 @@ class Config(object):
     hidden_size = 256
     
     # Number of hidden layers in model
-    num_layers = 3
+    num_layers = 1
     
     # Cell type to use
     # Valid cell types: 'lstm', 'rnn', 'gru'
     cell_type = 'lstm' 
-    
     
     ##########################
     # Training options

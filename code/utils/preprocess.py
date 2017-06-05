@@ -15,6 +15,7 @@ from itertools import chain
 from collections import Counter
 from sklearn import preprocessing
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from scipy.signal import butter, lfilter
 
 EMG_F_SAMPLE = 600.0
 # AUDIO_F_SAMPLE = 16e3
@@ -108,7 +109,7 @@ def triphones(phone, n_phones):
     return tris
 
 def compute_subphones(phones):
-    this_phone = phones[0]
+    this_phone = phones.iloc[0]
     n_this_phone = 0
     subphones = []
     for p in phones:
@@ -234,7 +235,7 @@ def transform(samples, lda):
 
     return samples
 
-def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
+def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None, lda=None):
     """
     Fits the n_components most discriminant features in the samples with respect 
     to the triphone labels, and transforms the samples accordingly. samples
@@ -254,15 +255,11 @@ def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
         samples: a list of n_sample np.ndarrays, each of shape
             (n_components, n_timesteps)
     """
-    if subset_to_use is None:
-        tr_samples = samples
-        tr_phone_labels = phone_labels
-    else:
-        tr_samples, tr_phone_labels = [], []
-        for i in range(len(samples)):
-            if subset_to_use[i]:
-                tr_samples.append(samples[i])
-                tr_phone_labels.append(phone_labels[i])
+    tr_samples, tr_phone_labels = [], []
+    for i in range(len(samples)):
+        if samples[i].shape[1] > 0 and (subset_to_use is None or subset_to_use[i]):
+            tr_samples.append(samples[i])
+            tr_phone_labels.append(phone_labels[i])
     
     if len(tr_samples) == 0:
         raise ValueError("Cannot perform LDA on no input data!")
@@ -282,26 +279,118 @@ def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
             y[cur_timestep] = phone_lookup[labels[t]]
             cur_timestep += 1
 
-    lda = LinearDiscriminantAnalysis(n_components=n_components)
-    lda.fit(X,y)
+    if lda is None:
+        lda = LinearDiscriminantAnalysis(n_components=n_components)
+        lda.fit(X,y)
+
     samples = transform(samples, lda)
 
-    return samples
+    return samples, lda
 
-def extract_features(pkl_filename, feature_type):
+def add_noise(emg):
+    """
+    Pretends there is an equal source of noise for all channels.
+    Amplitude of noise is chosen at random to be between 0 and 10% 
+    of the max amplitude of signal.  Period starts at random 
+    point in cycle.  Is 50 Hz because data was collected in Germany,
+    where power is 230 volts/50 Hz (vs. US where it is 60 Hz)
+    """
+    MAX_AMPLITUDE = 32767
+
+    # Sampling
+    # 1 second of data requires 600 frames.  And 600 fps is 600 Hz, sampling rate of EMG.
+    Ts = 1/EMG_F_SAMPLE
+
+    # Time vector
+    t = np.arange(0, len(emg)/EMG_F_SAMPLE, Ts) # each unit of t is a second
+
+    # Noise
+    randAmplitudeScale = np.random.random()*0.1
+    randOffset = np.random.random() * 2*np.pi
+    
+    fNoise = 50;                                           # Frequency [Hz]
+    aNoise = randAmplitudeScale*MAX_AMPLITUDE              # Amplitude
+    noise  = aNoise * np.sin(2 * np.pi * t * fNoise + randOffset)
+
+    # Add noise to signal
+    for channel in ["emg1", "emg2", "emg3", "emg4", "emg5", "emg6"]:
+        emg[channel] += noise
+    return emg
+    
+def select_subsequence(emg):
+    """ Given a sequence like "the cat slept", 
+    returns a consecutive sequence of words & corresponding data.
+    """
+    # Get locations of each word
+    new_word_begins = np.hstack([[0], np.where(emg["word"][1:] != emg["word"][:-1])[0] + 1])
+    #print(emg["word"][new_word_begins])
+    
+    full_transcript = " ".join(emg["word"][new_word_begins]).replace("$", "").strip()
+    if len(new_word_begins) <= 3:
+        return emg, full_transcript 
+    
+    # Select a random subsequence -- at least length 1, or at least length 2 if $ at end/begin
+    # is included, and guaranteed that begin comes before end
+    end_word, start_word = -1, -1
+    while (end_word <= start_word or 
+           end_word-start_word < 2 or 
+           end_word-start_word < 3 and (start_word == 0 or end_word == len(new_word_begins)-1)):
+        start_word = np.random.randint(max(1, len(new_word_begins)-2))
+        end_word = np.random.randint(start_word+1, len(new_word_begins))
+    
+    start_loc = new_word_begins[start_word]
+    end_loc = new_word_begins[end_word]
+    
+    new_transcript = " ".join(emg["word"][new_word_begins][start_word:end_word]).replace("$", "").strip()
+    new_emg = emg[start_loc:end_loc]
+    
+    if len(new_emg) == 0:
+        return emg, full_transcript
+    else:
+        return new_emg, new_transcript
+
+def remove_noise(emg):
+    """ Remove German power line noise of 50 Hz from all channels with a bandstop filter"""
+    def butter_bandstop_filter(data, lowcut, highcut, fs, order=2):
+        def butter_bandstop(lowcut, highcut, fs, order=2):
+            nyq = 0.5 * fs
+            low = lowcut / nyq
+            high = highcut / nyq
+            b, a = butter(order, [low, high], btype='bandstop')
+            return b, a
+            
+        b, a = butter_bandstop(lowcut, highcut, fs, order=order)
+        y = lfilter(b, a, data)
+        return y
+    
+    # Remove noise from signal
+    for channel in ["emg1", "emg2", "emg3", "emg4", "emg5", "emg6"]:
+        emg[channel] = butter_bandstop_filter(emg[channel], 49., 51., EMG_F_SAMPLE, order=2)
+    return emg
+
+def extract_features(pkl_filename, feature_type, should_subset=False, should_address_noise=False):    
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
+        
+    transcript = None
+    if should_subset:
+        new_emg, transcript = select_subsequence(emg)
+    if should_address_noise:
+        if np.random.random() > 0.75:
+            emg = add_noise(emg)    # 75% add
+        else:
+            emg = remove_noise(emg) # 25% remove
 
     if feature_type == "wand" or feature_type == "wand_lda" or feature_type == "wand_ldaa":
-        return wand_features(emg)
+        return wand_features(emg), transcript
     elif feature_type == "spectrogram":
-        return spectrogram_features(emg)
+        return spectrogram_features(emg), transcript
     else:
         raise RuntimeError("Invalid feature type specified")
 
 def extract_all_features(directory, feature_type, session_type=None, 
     le=None, dummies=None, dummy_train=None, 
-    use_scaler=True, scaler=None):
+    use_scaler=True, scaler=None, should_augment=False, lda=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -322,6 +411,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         use_scaler: boolean indicating whether to use the scaler
         scaler: sklearn.preprocessing.StandardScaler object to use for transform,
             or None if a new transformer should be learned, or "ignore" if ignored
+        should_augment: boolean indicating whether to augment data
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
@@ -362,26 +452,43 @@ def extract_all_features(directory, feature_type, session_type=None,
     except FileNotFoundError:
         print("Cannot open file %s -- check that directory to see if it needs to be renamed to the hardcoded path" % os.path.join(directory, "utteranceInfo.pkl"))
 
-    for i, utterance in meta.iterrows():
+    ctr = 1
+    for _, utterance in meta.iterrows():
         if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
-        features, phones = extract_features(pkl_filename, feature_type)
-        samples.append(features)
-        modes.append(utterance["mode"])
-        sessions.append(utterance["speakerSess"])
-        original_transcripts.append(utterance["transcript"])
-        phone_labels.append(phones)
-        is_audible_sample.append(utterance["mode"] == "audible")
         
+        # Figure out how we want to add noise, as per user specifications
+        add_addls = [False]
+        if should_augment:
+            add_addls += [True]*1
+        
+        # Add original, then then with any data augmentation added
+        for add_addl in add_addls:
+            (features, phones), transcript = extract_features(pkl_filename, feature_type, 
+                                                should_subset=add_addl, should_address_noise=add_addl)
+            # Print current status to user
+            print(ctr, pkl_filename, transcript, features.shape, len(phones))
+            ctr += 1
+            
+            samples.append(features)
+            modes.append(utterance["mode"])
+            sessions.append(utterance["speakerSess"])
+            if transcript is None: # use original
+                original_transcripts.append(utterance["transcript"])
+            else: # use doctored transcript from subsetting
+                original_transcripts.append(transcript)
+            phone_labels.append(phones)
+            is_audible_sample.append(utterance["mode"] == "audible")
+            
     if len(samples) == 0:
         raise ValueError("Dataset %s has no entries when filtered for '%s' " % 
                          (meta_info_path, session_type if session_type is not None else "(none)"))
         
     if feature_type == "wand_lda":
-        samples = wand_lda(samples, phone_labels)
+        samples, lda = wand_lda(samples, phone_labels, lda=lda)
     elif feature_type == "wand_ldaa":
-        samples = wand_lda(samples, phone_labels, subset_to_use=is_audible_sample)
+        samples, lda = wand_lda(samples, phone_labels, subset_to_use=is_audible_sample, lda=lda)
 
     # Build the encodings
     if le is None:
@@ -426,7 +533,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         padded_samples = np.reshape(padded_samples, (n_samples, max_timesteps, n_feats))
         
     return (padded_samples, sample_lens, np.array(transcripts), le, 
-            dummy_train, np.array(modes), np.array(sessions), scaler)
+            dummy_train, np.array(modes), np.array(sessions), scaler, lda)
 
 def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, 
                 dummies=None, dummy_train=None, 
@@ -439,7 +546,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None,
             raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
         if use_scaler and scaler is not None:
             raise ValueError("When label encoder is None, that means we're training -- so scaler should be None too. But it isn't.")
-        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler = feat_info
+        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler, lda = feat_info
         # Store label_encoder to disk
         label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
         with open(label_fn, "wb") as f:
@@ -457,7 +564,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None,
                 pickle.dump(scaler, f)
             print("Scaler stored")
     else:
-        samples, sample_lens, transcripts, _, _, modes, sessions, scaler = feat_info
+        samples, sample_lens, transcripts, _, _, modes, sessions, scaler, lda = feat_info
     
     # Verify to user load succeeded
     print("------")

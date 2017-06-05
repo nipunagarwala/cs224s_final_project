@@ -181,6 +181,7 @@ def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, sample
     epoch_weres = []
     dev_iter = cur_dev_iter
 
+    batched_samples_dev = []
     batched_samples, batched_transcripts, \
                 batched_sample_lens = make_batches(samples_tr, 
                                                     sample_lens_tr, 
@@ -239,7 +240,6 @@ def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, sample
             # Tensorboard -- training
             # train_writer.add_summary(train_summary, global_step)   
             train_writer.flush()
-            return 
 
 
         # Monitor training -- dev performance
@@ -335,7 +335,6 @@ def train_shared_emg_model(args, session, train_writer, dev_writer):
 def train_simple_emg_model(args, session, train_writer, dev_writer):
     # Perform the training
     dev_iter = 0
-    batched_samples_dev = []
     # Get the training data
     samples_tr, sample_lens_tr, transcripts_tr, label_encoder, dummy_train, _, _, scaler = prep_data(args, 
         Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, Config.use_scaler, None)
@@ -390,7 +389,7 @@ def test_model(args, samples, sample_lens, transcripts, modes, sessions, label_e
             test_writer = tf.summary.FileWriter(logs_path, session.graph)
 
             # Create dataset
-            batches = make_batches(samples, sample_lens, transcripts, Config.batch_size, modes=modes, sessions=sessions)
+            batches = make_batches(samples, sample_lens, transcripts, Config.batch_size, modes=modes, sessions=sessions, shuffle=False)
             batched_samples, batched_transcripts, batched_sample_lens, batched_modes, batched_sessions = batches
             
             test_start = time.time()
@@ -511,7 +510,7 @@ def main(args):
     shutil.copy("code/config.py", Config.checkpoint_dir)
     
     if args.phase == 'train':
-        # Run model training         
+        # Get the training data      
         train_model(args)
     
     elif args.phase == 'test':
@@ -547,12 +546,23 @@ def main(args):
                 print("Scaler restored")
             else:
                 raise RuntimeError("Scaler desired -- but no scaler available in %s for this run!" % scaler_fn)
-            
+        
+        # Retrieve LDA transform
+        lda_fn = os.path.join(Config.checkpoint_dir, "lda.pkl")
+        if lda_fn and os.path.isfile(lda_fn):
+            with open(lda_fn, "rb") as f:
+                lda = pickle.load(f)
+            print("LDA transform restored")
+        else:
+            raise RuntimeError("Cannot restore LDA transform from %s. We need to use the same transform that was used during training." % lda_fn)
+
         # Prep data
-        data, lens, transcripts, _, _, modes, sessions, _ = prep_data(args, 
+        data, lens, transcripts, _, _, modes, sessions, _, _ = prep_data(args, 
                     Config.test_path, Config.feature_type, Config.mode, label_encoder, 
-                    Config.dummies, dummy_train, Config.use_scaler, scaler)
-        # Run the model test           
+                    Config.dummies, dummy_train, Config.use_scaler, scaler,
+                    False, lda)
+        
+        # Run the model test
         test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
     
     else:
