@@ -331,7 +331,7 @@ def select_subsequence(emg):
     while (end_word <= start_word or 
            end_word-start_word < 2 or 
            end_word-start_word < 3 and (start_word == 0 or end_word == len(new_word_begins)-1)):
-        start_word = np.random.randint(len(new_word_begins)-2)
+        start_word = np.random.randint(max(0, len(new_word_begins)-2))
         end_word = np.random.randint(start_word+1, len(new_word_begins))
     
     start_loc = new_word_begins[start_word]
