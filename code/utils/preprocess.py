@@ -340,16 +340,38 @@ def select_subsequence(emg):
     transcript = " ".join(emg["word"][new_word_begins][start_word:end_word]).replace("$", "").strip()
     e = emg[start_loc:end_loc]
     return e, transcript
+
+def remove_noise(emg):
+    """ Remove mains noise from all channels with a bandstop filter"""
+    def butter_bandstop_filter(data, lowcut, highcut, fs, order=2):
+        def butter_bandstop(lowcut, highcut, fs, order=2):
+            nyq = 0.5 * fs
+            low = lowcut / nyq
+            high = highcut / nyq
+            b, a = butter(order, [low, high], btype='bandstop')
+            return b, a
+            
+        b, a = butter_bandstop(lowcut, highcut, fs, order=order)
+        y = lfilter(b, a, data)
+        return y
     
-def extract_features(pkl_filename, feature_type, should_subset=False, should_add_noise=False):
+    # Remove noise from signal
+    for channel in ["emg1", "emg2", "emg3", "emg4", "emg5", "emg6"]:
+        emg[channel] = butter_bandstop_filter(emg[channel], 59., 61., 600., order=2)
+    return emg
+
+def extract_features(pkl_filename, feature_type, should_subset=False, should_address_noise=False):
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
         
     transcript = None
     if should_subset:
         emg, transcript = select_subsequence(emg)
-    if should_add_noise:
-        emg = add_noise(emg)
+    if should_address_noise:
+        if np.random.random() > 0.75:
+            emg = add_noise(emg)    # 75% add
+        else:
+            emg = remove_noise(emg) # 25% remove
 
     if feature_type == "wand" or feature_type == "wand_lda" or feature_type == "wand_ldaa":
         return wand_features(emg), transcript
@@ -435,7 +457,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         # Add original, then then with any data augmentation added
         for add_addl in add_addls:
             (features, phones), transcript = extract_features(pkl_filename, feature_type, 
-                                                should_subset=add_addl, should_add_noise=add_addl)
+                                                should_subset=add_addl, should_address_noise=add_addl)
             samples.append(features)
             modes.append(utterance["mode"])
             sessions.append(utterance["speakerSess"])
