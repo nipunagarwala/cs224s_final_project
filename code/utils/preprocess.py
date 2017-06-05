@@ -9,6 +9,7 @@ import scipy.signal
 
 import numpy as np
 import pandas as pd
+from code.config import Config
 
 from itertools import chain
 from collections import Counter
@@ -426,6 +427,134 @@ def extract_all_features(directory, feature_type, session_type=None,
         
     return (padded_samples, sample_lens, np.array(transcripts), le, 
             dummy_train, np.array(modes), np.array(sessions), scaler)
+
+def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, 
+                dummies=None, dummy_train=None, 
+                use_scaler=True, scaler=None):
+    print("Extracting features")
+    # Extract features
+    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, use_scaler, scaler)
+    if label_encoder is None:
+        if dummy_train is not None:
+            raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
+        if use_scaler and scaler is not None:
+            raise ValueError("When label encoder is None, that means we're training -- so scaler should be None too. But it isn't.")
+        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler = feat_info
+        # Store label_encoder to disk
+        label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
+        with open(label_fn, "wb") as f:
+            pickle.dump(label_encoder, f)
+        # Store dummy_train to disk
+        dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
+        with open(dummy_fn, "wb") as f:
+            pickle.dump(dummy_train, f)
+        print("Labels (label_encoder and dummy_train) stored")
+        
+        if use_scaler:
+            # Store scaler
+            scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
+            with open(scaler_fn, "wb") as f:
+                pickle.dump(scaler, f)
+            print("Scaler stored")
+    else:
+        samples, sample_lens, transcripts, _, _, modes, sessions, scaler = feat_info
+    
+    # Verify to user load succeeded
+    print("------")
+    print("Features successfully extracted. Verification:")
+    print("Input 0 shape (max_timesteps, n_features):")
+    print(samples[0].shape)
+    print("Input 0 active timesteps")
+    print(sample_lens[0])
+    print("Target 0")
+    print(transcripts[0])
+    print(label_encoder.inverse_transform(transcripts[0]))
+    
+    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler
+
+
+
+def get_separate_mode_features(args):
+    
+    samples_tr_comp, sample_lens_tr_comp, transcripts_tr_comp, label_encoder_comp,\
+            dummy_train, mode_list_train, _, scaler = prep_data(args, 
+        Config.train_path, Config.feature_type, None, None, Config.dummies, None, Config.use_scaler, None)
+    # Get the dev data using the same label_encoder
+    data_de_comp, lens_de_comp, transcripts_de_comp, _, _ , mode_list_dev, _, _ = prep_data(args, 
+            Config.dev_path, Config.feature_type, None, label_encoder_comp, Config.dummies, dummy_train,
+            Config.use_scaler, scaler)
+
+    samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible, \
+      samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp, \
+       samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent, \
+       data_de_audible, lens_de_audible, transcripts_de_audible,\
+       data_de_whisp, lens_de_whisp, transcripts_de_whisp,\
+       data_de_silent, lens_de_silent, transcripts_de_silent = ([] for i in range(18))
+
+
+    for i in range(len(mode_list_train)):
+        if mode_list_train[i] == 'audible':
+            samples_tr_audible.append(samples_tr_comp[i,:,:])
+            sample_lens_tr_audible.append(sample_lens_tr_comp[i])
+            transcripts_tr_audible.append(transcripts_tr_comp[i])
+        elif mode_list_train[i] == 'whispered':
+            samples_tr_whisp.append(samples_tr_comp[i,:,:])
+            sample_lens_tr_whisp.append(sample_lens_tr_comp[i])
+            transcripts_tr_whisp.append(transcripts_tr_comp[i])
+        elif mode_list_train[i] == 'silent':
+            samples_tr_silent.append(samples_tr_comp[i,:,:])
+            sample_lens_tr_silent.append(sample_lens_tr_comp[i])
+            transcripts_tr_silent.append(transcripts_tr_comp[i])
+        else:
+            raise RuntimeError("Cannot find mode %s" % str(mode_list_train[i]))
+
+    for i in range(len(mode_list_dev)):
+        if mode_list_dev[i] == 'audible':
+            data_de_audible.append(data_de_comp[i,:,:])
+            lens_de_audible.append(lens_de_comp[i])
+            transcripts_de_audible.append(transcripts_de_comp[i])
+        elif mode_list_dev[i] == 'whispered':
+            data_de_whisp.append(data_de_comp[i,:,:])
+            lens_de_whisp.append(lens_de_comp[i])
+            transcripts_de_whisp.append(transcripts_de_comp[i])
+        elif mode_list_dev[i] == 'silent':
+            data_de_silent.append(data_de_comp[i,:,:])
+            lens_de_silent.append(lens_de_comp[i])
+            transcripts_de_silent.append(transcripts_de_comp[i])
+        else:
+            raise RuntimeError("Cannot find mode %s" % str(mode_list_dev[i]))
+
+    print("Length of transcriptions: {0}".format(len(transcripts_tr_comp)))
+    print("Dimensions per item: {0}".format(transcripts_tr_comp[0]))
+
+    samples_tr_audible = np.concatenate(np.expand_dims(samples_tr_audible,axis=0), axis=0)
+    sample_lens_tr_audible = np.array(sample_lens_tr_audible)
+    transcripts_tr_audible = np.array(transcripts_tr_audible)
+    samples_tr_whisp = np.concatenate(np.expand_dims(samples_tr_whisp,axis=0), axis=0)
+    sample_lens_tr_whisp = np.array(sample_lens_tr_whisp)
+    transcripts_tr_whisp = np.array(transcripts_tr_whisp)
+    samples_tr_silent = np.concatenate(np.expand_dims(samples_tr_silent,axis=0), axis=0)
+    sample_lens_tr_silent = np.array(sample_lens_tr_silent)
+    transcripts_tr_silent = np.array(transcripts_tr_silent)
+
+    data_de_audible = np.concatenate(np.expand_dims(data_de_audible,axis=0), axis=0)
+    lens_de_audible = np.array(lens_de_audible)
+    transcripts_de_audible = np.array(transcripts_de_audible)
+    data_de_whisp = np.concatenate(np.expand_dims(data_de_whisp,axis=0), axis=0)
+    lens_de_whisp = np.array(lens_de_whisp)
+    transcripts_de_whisp = np.array(transcripts_de_whisp)
+    data_de_silent = np.concatenate(np.expand_dims(data_de_silent,axis=0), axis=0)
+    lens_de_silent = np.array(lens_de_silent)
+    transcripts_de_silent = np.array(transcripts_de_silent)
+
+    return  samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible, \
+      samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp, \
+       samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent, \
+       data_de_audible, lens_de_audible, transcripts_de_audible,\
+       data_de_whisp, lens_de_whisp, transcripts_de_whisp,\
+       data_de_silent, lens_de_silent, transcripts_de_silent, label_encoder_comp
+
+
 
 if __name__ == "__main__":
     """

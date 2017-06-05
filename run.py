@@ -21,7 +21,7 @@ from time import gmtime, strftime
 
 from code.config import Config
 from code.models import SimpleEmgNN, MultiSharedEmgNN
-from code.utils.preprocess import extract_all_features
+from code.utils.preprocess import extract_all_features, prep_data, get_separate_mode_features
 from code.utils.utils import make_batches, compute_wer, compute_cer
 from code.utils.spell import correction
 
@@ -175,7 +175,7 @@ def create_model(args, session, restore, num_features, alphabet_size):
 
 def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, samples_de, 
                 sample_lens_de, transcripts_de, train_writer,
-                dev_writer, cur_dev_iter, mode=None):
+                dev_writer, label_encoder, cur_dev_iter, cur_epoch, mode=None):
     epoch_start = time.time()
     epoch_losses = []
     epoch_weres = []
@@ -237,8 +237,9 @@ def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, sample
                                         label_encoder)
 
             # Tensorboard -- training
-            train_writer.add_summary(train_summary, global_step)   
+            # train_writer.add_summary(train_summary, global_step)   
             train_writer.flush()
+            return 
 
 
         # Monitor training -- dev performance
@@ -295,57 +296,40 @@ def run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr, sample
 
 
 def train_shared_emg_model(args, session, train_writer, dev_writer):
-    # Perform the training
+
     dev_iter_audible = 0
     dev_iter_whisp = 0
     dev_iter_silent = 0
 
-    # Get the training data
-    samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible, label_encoder_audible,\
-            dummy_train, _, _, scaler = prep_data(args, 
-        Config.train_path, Config.feature_type, "audible", None, Config.dummies, None, Config.use_scaler, None)
-    # Get the dev data using the same label_encoder
-    data_de_audible, lens_de_audible, transcripts_de_audible, _, _ , _, _, _ = prep_data(args, 
-            Config.dev_path, Config.feature_type, "audible", label_encoder_audible, Config.dummies, dummy_train,
-            Config.use_scaler, scaler)
+    samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible, \
+      samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp, \
+       samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent, \
+       data_de_audible, lens_de_audible, transcripts_de_audible,\
+       data_de_whisp, lens_de_whisp, transcripts_de_whisp,\
+       data_de_silent, lens_de_silent, transcripts_de_silent,\
+       label_encoder_comp = get_separate_mode_features(args)
 
-    # Get the training data
-    samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp, label_encoder_whisp, \
-            dummy_train, _, _, scaler = prep_data(args, Config.train_path, Config.feature_type, 
-                    "whispered", None, Config.dummies, None, Config.use_scaler, None)
 
-    # Get the dev data using the same label_encoder
-    data_de_whisp, lens_de_whisp, transcripts_de_whisp, _, _ , _, _, _ = prep_data(args, 
-            Config.dev_path, Config.feature_type, "whispered", label_encoder_whisp, Config.dummies, dummy_train,
-            Config.use_scaler, scaler)
-
-    # Get the training data
-    samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent, label_encoder_silent, \
-            dummy_train, _, _, scaler = prep_data(args, Config.train_path, Config.feature_type,
-                     "silent", None, Config.dummies, None, Config.use_scaler, None)
-    # Get the dev data using the same label_encoder
-    data_de_silent, lens_de_silent, transcripts_de_silent, _, _ , _, _, _ = prep_data(args, 
-            Config.dev_path, Config.feature_type, "silent", label_encoder_silent, Config.dummies, dummy_train,
-            Config.use_scaler, scaler)
-
-    # Create or restore model
-    # TO BE FIXED (TODO): Replace label_encoder_audible with the actual collective label_encoder 
-    max_label_encoder_len = np.max([len(label_encoder_audible.classes_),len(label_encoder_whisp.classes_),
-                        len(label_encoder_silent.classes_)])
 
     model = create_model(args, session, args.restore, 
-                samples_tr_audible[-1], max_label_encoder_len+1)
+                samples_tr_audible.shape[2], len(label_encoder_comp.classes_)+1)
 
     for cur_epoch in range(Config.num_epochs):
+
         dev_iter_audible = run_epoch(session, model, samples_tr_audible, sample_lens_tr_audible, transcripts_tr_audible,
                        data_de_audible, lens_de_audible,transcripts_de_audible, train_writer, 
-                       dev_writer, dev_iter_audible, mode='audible')
+                       dev_writer, label_encoder_comp, dev_iter_audible, cur_epoch, mode='audible')
+        print("Complete Audible Epoch {0}".format(cur_epoch))
+
         dev_iter_whisp = run_epoch(session, model, samples_tr_whisp, sample_lens_tr_whisp, transcripts_tr_whisp ,
                         data_de_whisp, lens_de_whisp, transcripts_de_whisp, train_writer, 
-                        dev_writer, dev_iter_whisp, mode='whisp')
+                        dev_writer, label_encoder_comp, dev_iter_whisp,cur_epoch, mode='whisp')
+        print("Complete Whispered Epoch {0}".format(cur_epoch))
+
         dev_iter_silent = run_epoch(session, model, samples_tr_silent, sample_lens_tr_silent, transcripts_tr_silent ,
                         data_de_silent, lens_de_silent, transcripts_de_silent, train_writer, 
-                        dev_writer, dev_iter_silent, mode='silent')
+                        dev_writer, label_encoder_comp, dev_iter_silent,cur_epoch, mode='silent')
+        print("Complete Silent Epoch {0}".format(cur_epoch))
 
 
 def train_simple_emg_model(args, session, train_writer, dev_writer):
@@ -362,11 +346,12 @@ def train_simple_emg_model(args, session, train_writer, dev_writer):
 
     # Create or restore model
     model = create_model(args, session, args.restore, 
-                samples_tr.shape[-1], len(label_encoder.classes_)+1)
+                samples_tr[-1].shape[1], len(label_encoder.classes_)+1)
     for cur_epoch in range(Config.num_epochs):
 
         dev_iter = run_epoch(session, model, samples_tr, sample_lens_tr, transcripts_tr ,
-                        data_de, lens_de, transcripts_de, train_writer, dev_writer, dev_iter, mode=None)
+                        data_de, lens_de, transcripts_de,  train_writer, dev_writer, label_encoder,
+                        dev_iter, cur_epoch, mode=None)
 
 
 
@@ -508,53 +493,13 @@ def parse_commandline():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', default='simple_emg', choices=['simple_emg', 'shared_emg'])
     parser.add_argument('--phase', default='train', choices=['train', 'test'])
+    parser.add_argument('--audible', nargs='?', default=False, type=bool, help="Whether to use audible EMG features or not")
+    parser.add_argument('--whisp', nargs='?', default=False, type=bool, help="Whether to use whispered EMG features or not")
+    parser.add_argument('--silent', nargs='?', default=False, type=bool, help="Whether to use silent EMG features or not")
     parser.add_argument('--restore', nargs='?', default=False, type=bool, help="Whether to restore from checkpoint directory specified in Config (default is false; overriden to be True whenever phase is test)")
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, 
-                dummies=None, dummy_train=None, 
-                use_scaler=True, scaler=None):
-    print("Extracting features")
-    # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, use_scaler, scaler)
-    if label_encoder is None:
-        if dummy_train is not None:
-            raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
-        if use_scaler and scaler is not None:
-            raise ValueError("When label encoder is None, that means we're training -- so scaler should be None too. But it isn't.")
-        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler = feat_info
-        # Store label_encoder to disk
-        label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
-        with open(label_fn, "wb") as f:
-            pickle.dump(label_encoder, f)
-        # Store dummy_train to disk
-        dummy_fn = os.path.join(Config.checkpoint_dir, "dummy_train.pkl")
-        with open(dummy_fn, "wb") as f:
-            pickle.dump(dummy_train, f)
-        print("Labels (label_encoder and dummy_train) stored")
-        
-        if use_scaler:
-            # Store scaler
-            scaler_fn = os.path.join(Config.checkpoint_dir, "scaler.pkl")
-            with open(scaler_fn, "wb") as f:
-                pickle.dump(scaler, f)
-            print("Scaler stored")
-    else:
-        samples, sample_lens, transcripts, _, _, modes, sessions, scaler = feat_info
-    
-    # Verify to user load succeeded
-    print("------")
-    print("Features successfully extracted. Verification:")
-    print("Input 0 shape (max_timesteps, n_features):")
-    print(samples[0].shape)
-    print("Input 0 active timesteps")
-    print(sample_lens[0])
-    print("Target 0")
-    print(transcripts[0])
-    print(label_encoder.inverse_transform(transcripts[0]))
-    
-    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler
   
 def main(args):
     # TODO make the storing of config files with the more natural -- 
