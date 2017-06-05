@@ -319,7 +319,7 @@ def test_model(args, samples, sample_lens, transcripts, modes, sessions, label_e
             test_writer = tf.summary.FileWriter(logs_path, session.graph)
 
             # Create dataset
-            batches = make_batches(samples, sample_lens, transcripts, Config.batch_size, modes=modes, sessions=sessions)
+            batches = make_batches(samples, sample_lens, transcripts, Config.batch_size, modes=modes, sessions=sessions, shuffle=False)
             batched_samples, batched_transcripts, batched_sample_lens, batched_modes, batched_sessions = batches
             
             test_start = time.time()
@@ -425,16 +425,16 @@ def parse_commandline():
     args = parser.parse_args()
     return args
 
-def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummies=None, dummy_train=None, scaler=None):
+def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummies=None, dummy_train=None, scaler=None, lda=None):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, scaler)
+    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, scaler, lda=lda)
     if label_encoder is None:
         if dummy_train is not None:
             raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
         if scaler is not None:
             raise ValueError("When label encoder is None, that means we're training -- so scaler should be None too. But it isn't.")
-        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler = feat_info
+        samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler, lda = feat_info
         # Store label_encoder to disk
         label_fn = os.path.join(Config.checkpoint_dir, "labels.pkl")
         with open(label_fn, "wb") as f:
@@ -449,8 +449,13 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
         with open(scaler_fn, "wb") as f:
             pickle.dump(scaler, f)
         print("Scaler stored")
+        # Store LDA
+        lda_fn = os.path.join(Config.checkpoint_dir, "lda.pkl")
+        with open(lda_fn, "wb") as f:
+            pickle.dump(lda, f)
+        print("LDA transform stored")
     else:
-        samples, sample_lens, transcripts, _, _, modes, sessions, scaler = feat_info
+        samples, sample_lens, transcripts, _, _, modes, sessions, scaler, lda = feat_info
     
     # Verify to user load succeeded
     print("------")
@@ -463,7 +468,7 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, dummie
     print(transcripts[0])
     print(label_encoder.inverse_transform(transcripts[0]))
     
-    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler
+    return samples, sample_lens, transcripts, label_encoder, dummy_train, modes, sessions, scaler, lda
   
 def main(args):
     # TODO make the storing of config files with the more natural -- 
@@ -476,11 +481,11 @@ def main(args):
     
     if args.phase == 'train':
         # Get the training data
-        data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _, scaler = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, None)
-        # Get the dev data using the same label_encoder
-        data_de, lens_de, transcripts_de, _, _ , _, _, _ = prep_data(args, 
-                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train, scaler)
+        data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _, scaler, lda = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, None, None)
+        # Get the dev data using the same label_encoder and LDA transform
+        data_de, lens_de, transcripts_de, _, _ , _, _, _, _ = prep_data(args, 
+                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train, scaler, lda)
         # Run model training         
         train_model(args, data_tr, lens_tr, transcripts_tr, le,
                           data_de, lens_de, transcripts_de)
@@ -517,12 +522,22 @@ def main(args):
             print("Scaler restored")
         else:
             warnings.warn("No scaler for this run!  No units have been normalized as per training data.")
-            
+
+        # Retrieve LDA transform
+        lda_fn = os.path.join(Config.checkpoint_dir, "lda.pkl")
+        if lda_fn and os.path.isfile(lda_fn):
+            with open(lda_fn, "rb") as f:
+                lda = pickle.load(f)
+            print("LDA transform restored")
+        else:
+            raise RuntimeError("Cannot restore LDA transform from %s. We need to use the same transform that was used during training." % lda_fn)
+
         # Prep data
-        data, lens, transcripts, _, _, modes, sessions, _ = prep_data(args, 
-                    Config.test_path, Config.feature_type, Config.mode, label_encoder, 
-                    Config.dummies, dummy_train, scaler)
-        # Run the model test           
+        data, lens, transcripts, _, _, modes, sessions, _, _ = prep_data(args, 
+                    Config.train_path, Config.feature_type, Config.mode, label_encoder, 
+                    Config.dummies, dummy_train, scaler, lda)
+
+        # Run the model test
         test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
     
     else:

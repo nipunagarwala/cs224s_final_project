@@ -233,7 +233,7 @@ def transform(samples, lda):
 
     return samples
 
-def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
+def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None, lda=None):
     """
     Fits the n_components most discriminant features in the samples with respect 
     to the triphone labels, and transforms the samples accordingly. samples
@@ -281,11 +281,13 @@ def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
             y[cur_timestep] = phone_lookup[labels[t]]
             cur_timestep += 1
 
-    lda = LinearDiscriminantAnalysis(n_components=n_components)
-    lda.fit(X,y)
+    if lda is None:
+        lda = LinearDiscriminantAnalysis(n_components=n_components)
+        lda.fit(X,y)
+
     samples = transform(samples, lda)
 
-    return samples
+    return samples, lda
 
 def extract_features(pkl_filename, feature_type):
     with open(pkl_filename, "rb") as f:
@@ -299,7 +301,7 @@ def extract_features(pkl_filename, feature_type):
         raise RuntimeError("Invalid feature type specified")
 
 def extract_all_features(directory, feature_type, session_type=None, 
-    le=None, dummies=None, dummy_train=None, scaler=None):
+    le=None, dummies=None, dummy_train=None, scaler=None, lda=None):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -376,9 +378,9 @@ def extract_all_features(directory, feature_type, session_type=None,
                          (meta_info_path, session_type if session_type is not None else "(none)"))
         
     if feature_type == "wand_lda":
-        samples = wand_lda(samples, phone_labels)
+        samples, lda = wand_lda(samples, phone_labels, lda=lda)
     elif feature_type == "wand_ldaa":
-        samples = wand_lda(samples, phone_labels, subset_to_use=is_audible_sample)
+        samples, lda = wand_lda(samples, phone_labels, subset_to_use=is_audible_sample, lda=lda)
 
     # Build the encodings
     if le is None:
@@ -423,7 +425,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         padded_samples = np.reshape(padded_samples, (n_samples, max_timesteps, n_feats))
         
     return (padded_samples, sample_lens, np.array(transcripts), le, 
-            dummy_train, np.array(modes), np.array(sessions), scaler)
+            dummy_train, np.array(modes), np.array(sessions), scaler, lda)
 
 if __name__ == "__main__":
     """

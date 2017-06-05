@@ -33,7 +33,7 @@ def compute_cer(true_transcripts, decoded_transcripts):
 def make_batch(array, n_batches, batch_size):
     return np.stack([array[i*batch_size:i*batch_size+batch_size] for i in range(n_batches)])
 
-def make_batches(samples, sample_lens, transcripts, batch_size, modes=None, sessions=None):
+def make_batches(samples, sample_lens, transcripts, batch_size, modes=None, sessions=None, shuffle=True):
     """
     Shuffles the input data into batches.
 
@@ -53,9 +53,13 @@ def make_batches(samples, sample_lens, transcripts, batch_size, modes=None, sess
     n_batches = int(len(samples) / batch_size)
     if n_batches < 1:
         raise ValueError("Must have at least one batch of size %d to train model, but there are only %d datapoints available " % (batch_size, len(samples)))
-        
-    # Randomly permute the batches
-    p = np.random.permutation(len(samples))
+    
+    if shuffle:
+        # Randomly permute the batches
+        p = np.random.permutation(len(samples))
+    else:
+        p = range(len(samples))
+    
     samples = samples[p]
     sample_lens = sample_lens[p]
     transcripts = transcripts[p]
