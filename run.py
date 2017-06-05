@@ -427,10 +427,13 @@ def parse_commandline():
 
 def prep_data(args, path_to_data, feature_type, mode, label_encoder=None, 
                 dummies=None, dummy_train=None, 
-                use_scaler=True, scaler=None):
+                use_scaler=True, scaler=None,
+                should_augment=False):
     print("Extracting features")
     # Extract features
-    feat_info = extract_all_features(path_to_data, feature_type, mode, label_encoder, dummies, dummy_train, use_scaler, scaler)
+    feat_info = extract_all_features(path_to_data, feature_type, mode, 
+                    label_encoder, dummies, dummy_train, use_scaler, scaler,
+                    should_augment)
     if label_encoder is None:
         if dummy_train is not None:
             raise ValueError("When label encoder is None, that means we're training -- so dummy_train should be None too. But it isn't.")
@@ -459,6 +462,8 @@ def prep_data(args, path_to_data, feature_type, mode, label_encoder=None,
     # Verify to user load succeeded
     print("------")
     print("Features successfully extracted. Verification:")
+    print("Total samples:")
+    print(len(samples))
     print("Input 0 shape (max_timesteps, n_features):")
     print(samples[0].shape)
     print("Input 0 active timesteps")
@@ -481,10 +486,14 @@ def main(args):
     if args.phase == 'train':
         # Get the training data
         data_tr, lens_tr, transcripts_tr, le, dummy_train, _, _, scaler = prep_data(args, 
-                    Config.train_path, Config.feature_type, Config.mode, None, Config.dummies, None, Config.use_scaler, None)
+                    Config.train_path, Config.feature_type, Config.mode, 
+                    None, Config.dummies, None, Config.use_scaler, None,
+                    getattr(Config, "should_augment", False))
         # Get the dev data using the same label_encoder
         data_de, lens_de, transcripts_de, _, _ , _, _, _ = prep_data(args, 
-                    Config.dev_path, Config.feature_type, Config.mode, le, Config.dummies, dummy_train, Config.use_scaler, scaler)
+                    Config.dev_path, Config.feature_type, Config.mode, 
+                    le, Config.dummies, dummy_train, Config.use_scaler, scaler,
+                    False)
         # Run model training         
         train_model(args, data_tr, lens_tr, transcripts_tr, le,
                           data_de, lens_de, transcripts_de)
@@ -526,7 +535,8 @@ def main(args):
         # Prep data
         data, lens, transcripts, _, _, modes, sessions, _ = prep_data(args, 
                     Config.test_path, Config.feature_type, Config.mode, label_encoder, 
-                    Config.dummies, dummy_train, Config.use_scaler, scaler)
+                    Config.dummies, dummy_train, Config.use_scaler, scaler,
+                    False)
         # Run the model test           
         test_model(args, data, lens, transcripts, modes, sessions, label_encoder)
     

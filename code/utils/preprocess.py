@@ -287,9 +287,36 @@ def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None):
 
     return samples
 
-def extract_features(pkl_filename, feature_type):
+def add_noise(emg):
+    MAX_RANGE = 32767 # 2-byte signed integer, as per corpus spec
+    # Sampling
+    # 1 second of data requires 600 frames.  And 600 fps is 600 Hz, sampling rate of EMG.
+    fs = 600 
+    Ts = 1/fs
+
+    # Time vector
+    t = np.arange(0, len(emg)/fs, Ts) # each unit of t is a second
+
+    # Noise
+    randAmplitudeScale = np.random.random()*0.1
+    randOffset = np.random.random()*2*np.pi
+
+    fNoise = 60;                                           # Frequency [Hz]
+    aNoise = randAmplitudeScale*32767                      # Amplitude
+    noise  = aNoise * np.sin(2 * np.pi * t * fNoise + randOffset)
+
+    # Signal + Noise
+    for e in ["emg1", "emg2", "emg3", "emg4", "emg5", "emg6"]:
+        emg[e] +=  noise
+    
+    return emg
+
+def extract_features(pkl_filename, feature_type, should_augment=False):
     with open(pkl_filename, "rb") as f:
         audio, emg = pickle.load(f)
+        
+    if should_augment:
+        emg = add_noise(emg)
 
     if feature_type == "wand" or feature_type == "wand_lda" or feature_type == "wand_ldaa":
         return wand_features(emg)
@@ -300,7 +327,8 @@ def extract_features(pkl_filename, feature_type):
 
 def extract_all_features(directory, feature_type, session_type=None, 
     le=None, dummies=None, dummy_train=None, 
-    use_scaler=True, scaler=None):
+    use_scaler=True, scaler=None,
+    should_augment=False):
     """
     Extracts features from all files in a given directory according to the 
     `feature_type` and `session_type` requested
@@ -321,6 +349,7 @@ def extract_all_features(directory, feature_type, session_type=None,
         use_scaler: boolean indicating whether to use the scaler
         scaler: sklearn.preprocessing.StandardScaler object to use for transform,
             or None if a new transformer should be learned, or "ignore" if ignored
+        should_augment: boolean indicating whether to augment
 
     Returns:
         padded_samples: a numpy ndarray of shape (n_samples, max_timesteps, n_features).
@@ -365,13 +394,19 @@ def extract_all_features(directory, feature_type, session_type=None,
         if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
-        features, phones = extract_features(pkl_filename, feature_type)
-        samples.append(features)
-        modes.append(utterance["mode"])
-        sessions.append(utterance["speakerSess"])
-        original_transcripts.append(utterance["transcript"])
-        phone_labels.append(phones)
-        is_audible_sample.append(utterance["mode"] == "audible")
+        
+        augs = [False]
+        if should_augment:
+            augs += [True]*10
+            
+        for aug in augs:
+            features, phones = extract_features(pkl_filename, feature_type, should_augment=aug)
+            samples.append(features)
+            modes.append(utterance["mode"])
+            sessions.append(utterance["speakerSess"])
+            original_transcripts.append(utterance["transcript"])
+            phone_labels.append(phones)
+            is_audible_sample.append(utterance["mode"] == "audible")
         
     if len(samples) == 0:
         raise ValueError("Dataset %s has no entries when filtered for '%s' " % 

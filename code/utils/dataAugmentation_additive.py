@@ -84,12 +84,11 @@ def add_noise(emg_signal, show_plot=True):
     return signalNoise
 
 
-# Get some data to play with
-with open("data/train/002_001_0100.pkl", "rb") as f:
-    audio, emg = pickle.load(f)
 
+if __name__ == "__main__":
+    # Get some data to play with
+    with open("data/train/002_001_0100.pkl", "rb") as f:
+        audio, emg = pickle.load(f)
 
-signal = emg["emg1"]
-signalNoise = add_noise(signal)
-
-
+    signal = emg["emg1"]
+    signalNoise = add_noise(signal)
