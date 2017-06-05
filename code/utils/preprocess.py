@@ -254,15 +254,11 @@ def wand_lda(samples, phone_labels, n_components=12, subset_to_use=None, lda=Non
         samples: a list of n_sample np.ndarrays, each of shape
             (n_components, n_timesteps)
     """
-    if subset_to_use is None:
-        tr_samples = samples
-        tr_phone_labels = phone_labels
-    else:
-        tr_samples, tr_phone_labels = [], []
-        for i in range(len(samples)):
-            if subset_to_use[i]:
-                tr_samples.append(samples[i])
-                tr_phone_labels.append(phone_labels[i])
+    tr_samples, tr_phone_labels = [], []
+    for i in range(len(samples)):
+        if samples[i].shape[1] > 0 and (subset_to_use is None or subset_to_use[i]):
+            tr_samples.append(samples[i])
+            tr_phone_labels.append(phone_labels[i])
     
     if len(tr_samples) == 0:
         raise ValueError("Cannot perform LDA on no input data!")
@@ -328,9 +324,9 @@ def select_subsequence(emg):
     new_word_begins = np.hstack([[0], np.where(emg["word"][1:] != emg["word"][:-1])[0] + 1])
     #print(emg["word"][new_word_begins])
     
+    full_transcript = " ".join(emg["word"][new_word_begins]).replace("$", "").strip()
     if len(new_word_begins) <= 3:
-        transcript = " ".join(emg["word"][new_word_begins]).replace("$", "").strip()
-        return emg, transcript
+        return emg, full_transcript 
     
     # Select a random subsequence -- at least length 1, or at least length 2 if $ at end/begin
     # is included, and guaranteed that begin comes before end
@@ -344,9 +340,13 @@ def select_subsequence(emg):
     start_loc = new_word_begins[start_word]
     end_loc = new_word_begins[end_word]
     
-    transcript = " ".join(emg["word"][new_word_begins][start_word:end_word]).replace("$", "").strip()
-    e = emg[start_loc:end_loc]
-    return e, transcript
+    new_transcript = " ".join(emg["word"][new_word_begins][start_word:end_word]).replace("$", "").strip()
+    new_emg = emg[start_loc:end_loc]
+    
+    if len(new_emg) == 0:
+        return emg, full_transcript
+    else:
+        return new_emg, new_transcript
 
 def remove_noise(emg):
     """ Remove German power line noise of 50 Hz from all channels with a bandstop filter"""
@@ -373,7 +373,7 @@ def extract_features(pkl_filename, feature_type, should_subset=False, should_add
         
     transcript = None
     if should_subset:
-        emg, transcript = select_subsequence(emg)
+        new_emg, transcript = select_subsequence(emg)
     if should_address_noise:
         if np.random.random() > 0.75:
             emg = add_noise(emg)    # 75% add
@@ -451,23 +451,25 @@ def extract_all_features(directory, feature_type, session_type=None,
     except FileNotFoundError:
         print("Cannot open file %s -- check that directory to see if it needs to be renamed to the hardcoded path" % os.path.join(directory, "utteranceInfo.pkl"))
 
-    for i, utterance in meta.iterrows():
+    ctr = 1
+    for _, utterance in meta.iterrows():
         if session_type is not None and utterance["mode"] != session_type:
             continue
         pkl_filename = os.path.join(directory, utterance["label"] + ".pkl")
         
-        # Print current status to user
-        print(i, pkl_filename)
-        
         # Figure out how we want to add noise, as per user specifications
         add_addls = [False]
         if should_augment:
-            add_addls += [True]*10
+            add_addls += [True]*1
         
         # Add original, then then with any data augmentation added
         for add_addl in add_addls:
             (features, phones), transcript = extract_features(pkl_filename, feature_type, 
                                                 should_subset=add_addl, should_address_noise=add_addl)
+            # Print current status to user
+            print(ctr, pkl_filename, transcript, features.shape, len(phones))
+            ctr += 1
+            
             samples.append(features)
             modes.append(utterance["mode"])
             sessions.append(utterance["speakerSess"])
@@ -477,7 +479,7 @@ def extract_all_features(directory, feature_type, session_type=None,
                 original_transcripts.append(transcript)
             phone_labels.append(phones)
             is_audible_sample.append(utterance["mode"] == "audible")
-        
+            
     if len(samples) == 0:
         raise ValueError("Dataset %s has no entries when filtered for '%s' " % 
                          (meta_info_path, session_type if session_type is not None else "(none)"))
